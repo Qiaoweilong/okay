@@ -1,0 +1,237 @@
+class BarracudaGalleryV2{
+    constructor(element){
+        console.log(element);
+        this.element = element;
+        this.content = this.element.querySelector(".content");
+        this.zoom = null;
+
+        /* find all slides */
+        this.slides = this.element.querySelectorAll(".slide");
+        if(this.slides.length <= 1) this.element.classList.add("hide-controls");
+        if(this.slides.length > 0){
+            /* find current slide or create current from first */
+            this.currentSlide = this.element.querySelector(".slide.current")? this.element.querySelector(".slide.current") : this.slides[0]
+            console.log(this.element);
+            this.currentSlide.classList.add("current");
+            this.currentSlide = {"index" : Array.from(this.slides).indexOf(this.currentSlide),"element" : this.currentSlide};
+
+            /* pre-define previousSlide */
+            this.previousSlide = null;
+
+            /* Set gallery height */
+            if(!this.element.classList.contains("gallery-cover")){
+                setTimeout(()=>{
+                    this.setHeight();
+                    window.addEventListener("resize",this.setHeight.bind(this),false);
+                },10)
+            }
+
+            /* Set slide type */
+            this.setType();
+
+            /* create dots */
+            this.dots = this.element.querySelector(".dots");
+            this.initDots();
+
+            /* add listeners to controls*/
+            this.element.querySelector(".controls .next")?this.element.querySelector(".controls .next").addEventListener("click",this.nextSlide.bind(this)):null;
+            this.element.querySelector(".controls .prev")?this.element.querySelector(".controls .prev").addEventListener("click",this.prevSlide.bind(this)):null;
+            this.element.querySelectorAll(".zoom").forEach(el=>{el.addEventListener("click",this.zoomSlide.bind(this),false);})
+
+            /* add gestures */
+            if(typeof Swipe !== 'undefined'){
+                new Swipe(this.element);
+                this.element.addEventListener("swipe",this.swipe.bind(this));
+            }
+
+            /* find richmedia buttons and add listener */
+            this.richMedia = [];
+            this.element.querySelectorAll("button.media-icon").forEach(element=>{
+                element.addEventListener("click",this.play.bind(this),false);
+            })
+
+            /* mark gallery as initialized */
+            this.element.classList.add("barracuda-gallery-v2-initialized");
+        }
+    }
+
+    /* Swipe */
+    swipe(e){
+        if(e.detail && e.detail.direction){
+            switch (e.detail.direction) {
+                case "left": this.nextSlide(); break;
+                case "right": this.prevSlide(); break;
+                default: break;
+            }
+        }
+    }
+
+    /* create all dots */
+    initDots(){
+        var template = this.dots.querySelector(".dot");
+        if(this.slides.length > 5) this.dots.classList.add("dots-limit");
+        for(var i = 0; i < this.slides.length ;i++){
+            let dot = template.cloneNode(true);
+            dot.addEventListener("click",this.setSlide.bind(this,i), false);
+            this.dots.appendChild(dot);
+        }
+        template.remove();
+        this.setDot(this.currentSlide.index);
+    }
+    /* set dot as current */
+    setDot(){
+        var dots = this.dots.querySelectorAll(".dot")
+        dots.forEach((dot, index)=>{
+            if(index != this.currentSlide.index) dot.classList.remove("current");
+            else dot.classList.add("current");
+        })
+
+        function dotsVisibility(dots, from = null, to = null){
+            if(dots.length>0){
+                dots.forEach(dot=>{
+                    dot.classList.remove("end");
+                    dot.classList.add("visible");
+                })
+                if(from){
+                    for (let i = 0; i < from; i++) { if(dots[i]) dots[i].classList.remove("visible");}
+                    if(dots[from]) dots[from].classList.add("end");
+                }
+                if(to){
+                    for (let i = to; i < dots.length; i++){ if(dots[i]) dots[i].classList.remove("visible");}
+                    if(dots[(to-1)] && (to != dots.length)) dots[(to-1)].classList.add("end");
+                }
+            }
+        }
+        
+        var visibleDots = 5; // count of visible dots
+        var dotsCount = dots.length;
+        if(dotsCount <= visibleDots)
+            dotsVisibility(dots);
+        else if(this.currentSlide.index < 3)
+            dotsVisibility(dots,null,visibleDots);
+        else if((this.currentSlide.index + 3)> dotsCount)
+            dotsVisibility(dots,(dotsCount-visibleDots),null);
+        else
+            dotsVisibility(dots,(this.currentSlide.index - 2),(this.currentSlide.index + 3))
+    }
+    zoomSlide(){
+        console.log("Zoom"+ this.zoom)
+        if(this.zoom){
+            this.zoom.classList.remove("visible");
+            setTimeout(()=>{
+                this.zoom.remove();
+                unlockBodyPosition();
+                this.zoom = null;
+            },400);
+        }else{
+            var img = this.currentSlide.element.querySelector("img");
+            var zoomIcon = this.currentSlide.element.querySelector(".icon-zoom-out");
+            if(img && zoomIcon){
+                    this.zoom = document.createElement("div");
+                    this.zoom.classList.add("fullscreen-image")
+                    var newImg = img.cloneNode(true);
+                    newImg.removeAttribute("sizes");
+                    newImg.removeAttribute("srcset");
+                    newImg.setAttribute("src", newImg.dataset.mediaFullscreen);
+                    var newZoomIcon = zoomIcon.cloneNode(true);
+                    newZoomIcon.addEventListener("click",this.zoomSlide.bind(this));
+                    newZoomIcon.classList.remove("hidden");
+                    this.zoom.appendChild(newImg);
+                    this.zoom.appendChild(newZoomIcon);
+                    this.zoom.classList.add("scroll-inside");
+                    this.element.closest(".featured-product,.product-detail").appendChild(this.zoom);
+                    lockBodyPosition();
+                    setTimeout(()=>{
+                        this.zoom.classList.add("visible");
+                    },10)
+            }
+        }
+    }
+    nextSlide(){
+        if(this.currentSlide.index == (this.slides.length - 1)) this.setSlide(0);
+        else this.setSlide(this.currentSlide.index + 1);
+    }
+    prevSlide(){
+        if(this.currentSlide.index > 0) this.setSlide(this.currentSlide.index - 1);
+        else this.setSlide(this.slides.length - 1);
+    }
+    setHeight(){
+        if(this.currentSlide.element.scrollHeight > 100)
+            this.content.style.height = this.currentSlide.element.scrollHeight + "px";
+        else
+            setTimeout(this.setHeight.bind(this),20);
+    }
+    setType(){
+        this.element.classList.remove("xr-active");
+
+        if(this.currentSlide.element.dataset.mediaType == "image"){
+            this.element.classList.add("current-type-image");
+            this.element.classList.remove("current-type-model");
+            this.element.classList.remove("current-type-richmedia");
+        }else if(this.currentSlide.element.dataset.mediaType == "model"){
+            this.element.classList.remove("current-type-image");
+            this.element.classList.add("current-type-model");
+            this.element.classList.remove("current-type-richmedia");
+        }else{
+            this.element.classList.remove("current-type-image");
+            this.element.classList.remove("current-type-model");
+            this.element.classList.add("current-type-richmedia");
+        }
+    }
+    show(mediaId){
+            var slide = this.content.querySelector(".slide"+mediaId);
+            var position = Array.from(this.slides).indexOf(slide);
+            if(position >= 0) this.setSlide(position);
+    }
+    setSlide(nth){
+        if(this.previousSlide == null && this.currentSlide.index != nth){
+            /* Pause all */
+            this.pause();
+
+            /* Redefine slides */
+            this.previousSlide = Object.assign({}, this.currentSlide);
+            this.currentSlide = {"index": nth,"element": this.slides[nth]}
+            /* set dot to target slide */
+            this.setDot();
+            /* set gallery height */
+            if(!this.element.classList.contains("gallery-cover")) this.setHeight();
+            /* set gallery type */
+            this.setType();
+            
+            this.currentSlide.element.classList.add("before-current");
+            setTimeout(()=>{
+                this.previousSlide.element.classList.add("after-current");
+                this.previousSlide.element.classList.remove("current");
+                    setTimeout(()=>{
+                        this.previousSlide.element.classList.remove("after-current");
+                        this.currentSlide.element.classList.add("current");
+                        this.currentSlide.element.classList.remove("before-current");
+                        /* end animation */
+                        this.previousSlide = null;
+                    },510)
+            },10)
+        }else if(this.previousSlide != null) console.warn("Barracuda gallery: In motion. Wait.");
+        
+    }
+
+    pause(){
+        this.richMedia.forEach(el=>{
+            if(el.classList.contains("js-youtube"))
+                el.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+            else if(el.classList.contains("js-vimeo"))
+                el.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+            else if(el.classList.contains("video"))
+                el.pause();
+        })
+    }
+    play(){
+        var mediaResource = this.currentSlide.element.querySelector("template");
+        console.log(this.currentSlide.element);
+        var mediaTarget = document.createElement("div");
+        mediaTarget.classList.add("media-box");
+        mediaTarget.innerHTML = mediaResource.innerHTML;
+        if( this.currentSlide.element.querySelector(".slide-media") )this.currentSlide.element.querySelector(".slide-media").appendChild(mediaTarget);
+        this.currentSlide.element.querySelector("button.media-icon").remove();
+        this.richMedia.push(mediaTarget.childNodes[0]);
+    }
+}

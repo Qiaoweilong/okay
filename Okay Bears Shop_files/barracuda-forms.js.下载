@@ -1,0 +1,346 @@
+class BarracudaCount{
+    constructor(element){
+        this.element = element;
+        this.element.classList.add("use-barracuda-count-initialized");
+
+
+        this.container = document.createElement("DIV");
+        this.container.classList.add("barracuda-count");
+        if(element.classList.contains('disabled')) this.container.classList.add("disabled");
+
+
+        this.element.parentElement.insertBefore(this.container, this.element)
+        this.element.remove();
+        this.container.appendChild(this.element);
+        this.debouncer = null;
+
+        //minus
+        var minus = document.createElement("DIV");
+        this.container.insertBefore(minus,this.element);
+            minus.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-minus-circle"><line x1="8" y1="12" x2="16" y2="12"></line></svg>';
+            minus.addEventListener("click",this.minus.bind(this)); 
+
+        //plus
+        var plus = document.createElement("DIV");
+        this.container.appendChild(plus);
+            plus.innerHTML= '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus-circle"><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>';
+            plus.addEventListener("click",this.plus.bind(this));
+    }
+    plus(){
+        this.element.value = !this.element.dataset.max && parseInt(this.element.dataset.max)<=parseInt(this.element.value)? this.element.dataset.max : parseInt(this.element.value) + 1;
+        this.trigger();
+    }
+    minus(){
+        this.element.value = parseInt(this.element.value) <= 0? 0: parseInt(this.element.value) - 1;
+        this.trigger();
+    }
+    trigger(debouncer = false){
+        
+        /* Wait 400ms after last click before trigger action, and reload cart section. */
+        if(!debouncer){
+            clearTimeout(this.debouncer);
+            this.debouncer = setTimeout((()=>{this.trigger(true)}).bind(this),400);
+        }else{
+        var event = new Event('change', {
+            bubbles: true,
+            cancelable: true,
+        });
+        
+        this.element.dispatchEvent(event);
+        }
+    }
+}
+
+class BarracudaProduct {
+    constructor(element){
+        this.element = element;
+        this.element.classList.add('barracuda-product-initialized');
+        this.parentEl = this.element.closest('.product-part');
+        this.debug = false;
+
+        if(this.element) this.init();
+    }
+
+    init(){
+        /* Get all Product's variants */
+        this.productVariants = {}
+        this.element.querySelectorAll(".variant-data-source").forEach(element=>{
+            var variant_id = element.dataset.id;
+            this.productVariants[variant_id] = {};
+            element.querySelectorAll("span").forEach(el=>{
+            this.productVariants[variant_id][el.dataset.mapas] = el.innerText;
+            })
+        })
+
+        /* Get selected options */
+        var x = this.element.querySelector("select[name=id] option[selected]");
+
+        this.selectedOptions = {
+            "1": x.dataset.option1,
+            "2": x.dataset.option2,
+            "3": x.dataset.option3,
+        }
+        /* add Event listeners for block selection */
+        this.parentEl.querySelectorAll(".picker-selector").forEach((el) => {
+            el.addEventListener("click", ((e) => {
+                e.preventDefault;
+                this.setPicker(el)
+            }).bind(this));
+            el.addEventListener('keypress', ((e)=>{
+                if (e.key === 'Enter') {
+                    this.setPicker(el)
+                }
+            }).bind(this));
+        })
+
+        /* add Event listeners for options selectors */
+        this.parentEl.querySelectorAll(".option-selector").forEach((el)=>{
+            el.addEventListener("change",(()=>{  
+                this.optionChange(el.dataset.position,el.value)
+                }).bind(this)
+            , false);
+        });
+
+        /* add Event listeners for selected options from subscription selector */
+        if(this.parentEl.querySelector(".barracuda-select select[name=selling_plan]"))
+        this.parentEl.querySelector(".barracuda-select select[name=selling_plan]").addEventListener("change",(()=>{
+
+            var el = this.element.querySelector("select[name=selling_plan]");
+            el = this.element.querySelectorAll("select[name=selling_plan] option")[el.selectedIndex];
+                if(el){
+                    if(el.value == ""){
+                        for(var i = 1; i <= 3; i++){
+                            var optionSelect = this.element.querySelector("select[name=option"+i+"]");
+                            if(optionSelect){ 
+                                optionSelect.disabled = false;
+                                optionSelect.parentElement.classList.remove("disabled");
+                            }
+                        }
+                    }else{
+                        var opt = [];
+                        opt[1] = el.dataset.option1;
+                        opt[2] = el.dataset.option2;
+                        opt[3] = el.dataset.option3;
+
+                        for(var i = 1; i <= 3; i++){
+                            var optionSelect = this.parentEl.querySelector("select[name=option"+i+"]");
+                            if(optionSelect){ 
+                                optionSelect.value = opt[i];
+                                optionSelect.disabled = true;
+                                optionSelect.parentElement.classList.add("disabled");
+                            }
+                        }
+
+                        var selector = "select[name=id] option.option1-"+opt[1]+".option2-"+opt[2]+".option3-"+opt[3];
+                        var selectedOption =  this.element.querySelector(selector)
+
+                        var selectedVariantId = selectedOption.value;
+                        /* Set url to variants url */
+                        if (history.replaceState) {
+                            var newUrl = "".concat(window.location.protocol, "//").concat(window.location.host).concat(window.location.pathname, "?variant=").concat(selectedVariantId);
+                            window.history.replaceState({
+                                path: newUrl
+                            }, '', newUrl);
+                        }
+
+                        // We need set variant id to master select
+                        this.element.querySelector("select[name=id]").querySelector('[selected]').removeAttribute('selected');
+                        this.element.querySelector("select[name=id]").querySelector("[value=\"".concat(selectedVariantId, "\"]")).setAttribute('selected', 'selected');
+
+                        // Allow system monitoring the name attribute to work
+                        this.element.querySelector("select[name=id]").dispatchEvent(new Event('change',{
+                            bubbles: true
+                        }));
+                    }
+                }
+            }).bind(this), false);
+    }
+    setPicker(picker) {
+        let bPicker = picker.closest('.barracuda-picker');
+        let pickerSelector = bPicker ? bPicker.querySelector("select") : false;
+        let pickerSelectedValueLabel = bPicker ? bPicker.querySelector(".selected-value") : false;
+        if (bPicker && pickerSelector) {
+            bPicker.querySelectorAll(".button").forEach(el => { 
+                el.classList.add("outline-button");
+            })
+            bPicker.querySelectorAll(".picker-selector").forEach(el => { 
+                el.classList.remove("selected")
+            })
+            picker.classList.add("selected");
+            if(picker.classList.contains("button"))
+                picker.classList.remove("outline-button");
+
+            //Try to set selected value to label
+            pickerSelectedValueLabel ? pickerSelectedValueLabel.innerText = picker.dataset.label: false;
+            //Set value to hidden select
+            pickerSelector.value = picker.dataset.value;
+
+            pickerSelector.dispatchEvent(new Event('change',{
+                bubbles: true
+            }));
+        }
+    }
+    optionChange(position, value){
+        this.selectedOptions[position] = value;
+
+        /* get variant id from master select */
+        var selector = 'select[name="id"] option.option1-'+this.selectedOptions[1]+".option2-"+this.selectedOptions[2]+".option3-"+this.selectedOptions[3];
+        var selectedVariantId = this.element.querySelector('select[name="id"] option.option1-'+this.selectedOptions[1]+".option2-"+this.selectedOptions[2]+".option3-"+this.selectedOptions[3]);
+        /* Test if variant exists in master select */
+        if(selectedVariantId){
+            selectedVariantId = selectedVariantId.value;
+
+            /* Set url to variants url */
+            if (history.replaceState) {
+                var newUrl = "".concat(window.location.protocol, "//").concat(window.location.host).concat(window.location.pathname, "?variant=").concat(selectedVariantId);
+                window.history.replaceState({
+                    path: newUrl
+                }, '', newUrl);
+            }
+
+            // We need set variant id to master select
+            this.element.querySelector("select[name=id]").querySelector('[selected]').removeAttribute('selected');
+            this.element.querySelector("select[name=id]").querySelector("[value=\"".concat(selectedVariantId, "\"]")).setAttribute('selected', 'selected');
+
+            // Allow system monitoring the name attribute to work
+            this.element.querySelector("select[name=id]").dispatchEvent(new Event('change',{
+                bubbles: true
+            }));
+            
+            /* Move to variant image in gallery */
+            if(this.parentEl.querySelector(".barracuda-gallery-v2")){
+                var galleryId = this.parentEl.querySelector(".barracuda-gallery-v2").id
+                if(galleryId){ 
+                    if(Barracuda.elements.GalleryObjectsV2[galleryId]){
+                        Barracuda.elements.GalleryObjectsV2[galleryId].show(".media-"+this.productVariants[selectedVariantId].variant_media)
+                    }
+                }
+            }
+
+            /* Map new data to all elements */
+            this.parentEl.querySelectorAll(".variant-data").forEach((el) => {
+            el.innerText = this.productVariants[selectedVariantId][el.dataset.map];
+            })
+
+            /* hide max quantity (can be unhidden when user try add more items to cart) */
+            if(this.parentEl.querySelector(".cant-add-more")){
+                this.parentEl.querySelector(".cant-add-more").classList.add("visually-hidden");
+            }
+
+            /* recreate availability */
+            this.parentEl.querySelectorAll(".check-availability").forEach((el) => {
+            el.querySelector("span.availability-dot").remove();
+            el.innerHTML = el.innerHTML + '<span class="availability-dot '+this.productVariants[selectedVariantId]['availability']+'-dot"></span>';
+            el.dataset.url = this.productVariants[selectedVariantId]['variant_url'];
+            })
+
+            /* Enable or Disable AddToCart button */
+            var button = this.element.querySelector(".barracuda-cart-addToCartButton");
+            var dynamicButtons = this.element.querySelector(".dynamic-buy");
+            if(button && this.productVariants[selectedVariantId].available == "true"){
+                button.classList.remove("disabled");
+                if(dynamicButtons) dynamicButtons.classList.remove("hidden");
+            }else if(button && this.productVariants[selectedVariantId].available == "false"){
+                button.classList.add("disabled");
+                if(dynamicButtons) dynamicButtons.classList.add("hidden");
+            }else{
+                console.warn("Add to Cart button not found");
+            }
+        }else
+        {
+            /* Variant unavailable */
+            var button = this.element.querySelector(".barracuda-cart-addToCartButton");
+            var dynamicButtons = this.element.querySelector(".dynamic-buy");
+            if(button){
+            button.classList.add("disabled");
+            button.innerText = button.dataset.unavailable;
+            }
+            if(dynamicButtons) dynamicButtons.classList.add("hidden");
+        }
+    }
+}
+
+class BarracudaAjaxForm{
+    constructor(form, button = null){
+        form.classList.add("use-barracuda-ajax-form-initialized");
+        this.debug = true;
+        this.form = form
+        this.message = null;
+        this.button = button? button : ( form.querySelector("input[type=submit], button[type=submit]")?  form.querySelector("input[type=submit], button[type=submit]"): false)
+        if(!this.button) console.error("BarracudaAjaxForm: button not found", form);
+        if(this.button) this.button.addEventListener('click', this.send.bind(this));
+    }
+    send(event){
+        event.preventDefault();
+        this.form.classList.add("loading")
+        axios({
+            method: "post",
+            url: this.form.action,
+            data: new FormData(this.form),
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        .then(function (response) {
+            var x = document.createElement("html");
+            x.innerHTML=response.data;
+            console.log(x);
+            if(x.querySelector(".shopify-challenge__container, #g-recaptcha")){
+                this.form.submit();
+            }else if(x.querySelector("#page-content .ajax-form-success")) {
+
+                if(this.form.dataset.renew &&  x.querySelector("#"+this.form.dataset.renew) && document.getElementById(this.form.dataset.renew))
+                    document.getElementById(this.form.dataset.renew).replaceWith( x.querySelector("#"+this.form.dataset.renew))
+                
+                this.success(x.querySelector("#page-content .ajax-form-success"))
+            }
+            else if(x.querySelector("#page-content .ajax-form-failure")) {
+                this.failure(x.querySelector("#page-content .ajax-form-failure"))
+            }else{
+                if(this.button.dataset.redirect)
+                    window.location = this.button.dataset.redirect
+                else if(this.form.action)
+                    window.location.href = this.form.action
+                else
+                    this.form.submit();
+            }
+        }.bind(this))
+        .catch((function (error) {
+            console.error(error);
+            this.failure();
+        }).bind(this));
+    }
+    success(success = null){
+        if(success){
+            this.message = success;
+            this.form.appendChild(this.message)
+            this.message.addEventListener("click", this.erase.bind(this));
+            this.form.classList.add("form-success");
+        }
+        this.form.classList.remove("loading");
+    }
+    failure(error = null){
+        if(error){
+            this.message = error;
+        }else{
+            this.message = document.createElement("div")
+            this.message.classList.add("ajax-form-failure")
+            this.message.innerHTML = "<span>Connection failed</span>"
+        }
+        this.form.appendChild(this.message)
+        this.message.addEventListener("click", this.hide.bind(this));
+        this.form.classList.add("form-failure");
+        
+        this.form.classList.remove("loading");
+    }
+    hide(){
+        this.form.classList.remove("form-success");
+        this.form.classList.remove("form-failure");
+        if(this.message) {
+            this.message.removeEventListener("click", this.hide.bind(this));
+            this.message.remove();
+        }
+    }
+    erase(){
+        this.form.reset();
+        this.hide();
+    }
+}

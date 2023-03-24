@@ -1,0 +1,298 @@
+/* onload javascript */
+if(!bodyElement) var bodyElement = document.querySelector("body");
+
+/* Add hidden to all topbars */
+document.querySelectorAll(".topbar").forEach(el=>{
+  el.setAttribute("hidden", true);
+});
+
+/* Add page dimensions element to page */
+Barracuda.createStats();
+window.addEventListener("resize",Barracuda.createStats);
+
+/* Define scrollbar width and height */
+Barracuda.setScrollBarWidth();
+
+/* Listen for escape key and if, then close overlay window */
+document.addEventListener('keydown', function(event){
+	if(event.key === "Escape" && document.querySelector("body.show-overlay"))
+      overlayClick(null, true);
+});
+
+/* scroll actions */
+var lastPosition = 0;
+window.addEventListener("scroll", () => {
+   if (window.scrollY < lastPosition - 10 || window.scrollY > lastPosition + 10) {
+      if (window.scrollY < lastPosition - 10) bodyElement.classList.add("scroll-top");
+      else bodyElement.classList.remove("scroll-top");
+
+      if (window.scrollY > lastPosition + 10) bodyElement.classList.add("scroll-down");
+      else bodyElement.classList.remove("scroll-down");
+
+      if (window.scrollY <= 0) bodyElement.classList.add("scroll-on-top");
+      else bodyElement.classList.remove("scroll-on-top");
+
+      if (window.scrollY != 0 && window.scrollY < 10) bodyElement.classList.add("scroll-after-top");
+      else bodyElement.classList.remove("scroll-after-top");
+
+      var headerHeight = document.querySelector("#header").offsetHeight;
+      if(window.scrollY > 10) bodyElement.classList.add("after-header");
+      else bodyElement.classList.remove("after-header");
+
+      if ((window.innerHeight + window.scrollY + 100 ) >= bodyElement.offsetHeight) bodyElement.classList.add("on-bottom");
+      else bodyElement.classList.remove("on-bottom");
+
+      lastPosition = window.scrollY;
+   }
+});
+
+/* Cookies bar */
+if(getCookie('cookie-bar') != "confirm"){
+  var el = document.querySelector("#cookies-bar");
+  if (el){
+    el.classList.remove("hide");
+    el.querySelector("#cookies-bar-confirm-button").addEventListener("click",()=>{
+      setCookie("cookie-bar","confirm",120);
+      Barracuda.fadeOut(el,()=>{
+        el.classList.add("hide");
+    }, (Barracuda.duration * 2));
+    },false);
+  }
+}
+      
+/* Product-recommendations load */
+Barracuda.loadRecommendations = function (){
+  var placeholder = document.querySelector(".product-recommendations-not-loaded");
+  var placeholder_parent = document.querySelector(".product-recommendations:not(.initialized)");
+  if(placeholder && placeholder_parent){
+    placeholder_parent.classList.add("initialized");
+    axios.get('/recommendations/products', {
+      params: {
+        section_id: placeholder.dataset.sectionid,
+        "limit": 4,
+        product_id: parseInt(placeholder.dataset.productid)
+      }
+    })
+    .then(function (response) {
+      console.log("placeholder", placeholder, "placeholder_parent", placeholder_parent);
+      var code = response.data;
+      var ajaxElement = document.createElement("DIV");
+      ajaxElement.innerHTML = code;
+      placeholder_parent.innerHTML += ajaxElement.querySelector(".product-recommendations").innerHTML;
+      placeholder.remove();
+      Barracuda.init();
+      Barracuda.elements.init();
+      Barracuda.setScrollBarWidth();
+    })
+    .catch(function (error) {
+      console.log(error);
+    })
+  }
+}
+
+/* Predefine Barracuda objects (Custom elements) */
+Barracuda.elements = {}
+Barracuda.elements.GalleryObjects = {};
+Barracuda.elements.GalleryObjectsV2 = {};
+Barracuda.elements.SlideshowObjects = {};
+Barracuda.elements.Counts = [];
+Barracuda.elements.AjaxForms = [];
+Barracuda.elements.Maps = [];
+Barracuda.elements.Products = [];
+Barracuda.elements.Overlapping = {}
+Barracuda.elements.lazyVideos = [];
+Barracuda.elements.lazyMaps = [];
+Barracuda.elements.richMedia = {};
+
+if(document.querySelector(".main-menu"))
+  Barracuda.elements.mainMenu = new BarracudaAnimatedMenu();
+
+
+Barracuda.elements.init = function (){
+  /* Load recommendations */
+  Barracuda.loadRecommendations();
+
+  /* Barracuda overlapping */
+  Barracuda.elements.Overlapping = new BarracudaOverlapping();
+
+  /* Barracuda gallery v2 */
+  document.querySelectorAll(".barracuda-gallery-v2:not(.barracuda-gallery-v2-initialized)").forEach(el=>{
+    Barracuda.elements.GalleryObjectsV2[el.id] = new BarracudaGalleryV2(el);
+  })
+
+  /* Barracuda slideshow */
+  document.querySelectorAll(".barracuda-slideshow:not(.barracuda-slideshow-initialized)").forEach(el=>{
+      Barracuda.elements.SlideshowObjects[el.id] = new BarracudaSlideshow(el);
+  })
+
+  /* Barracuda forms */
+  document.querySelectorAll(".use-barracuda-count:not(.use-barracuda-count-initialized)").forEach(element=>{
+    Barracuda.elements.Counts.push(new BarracudaCount(element))
+  });
+
+  /* Barracuda ajax form */
+  document.querySelectorAll(".use-barracuda-ajax-form:not(.use-barracuda-ajax-form-initialized)").forEach(element=>{
+    Barracuda.elements.AjaxForms.push(new BarracudaAjaxForm(element))
+  });
+
+  /* Barracuda lazy-map */
+  document.querySelectorAll(".lazy-map:not(.lazy-map-initialized)").forEach(element=>{
+    element.classList.add("lazy-map-initialized")
+    Barracuda.elements.lazyMaps.push(element)
+  })
+
+  /* Barracuda product form - variants */
+  document.querySelectorAll(".barracuda-product:not(.barracuda-product-initialized)").forEach(element=>{
+    Barracuda.elements.Products.push(new BarracudaProduct(element))
+  });
+
+  /* Barracuda lazy-video */
+  document.querySelectorAll(".lazy-video:not(.lazy-video-initialized)").forEach(element=>{
+    element.classList.add("lazy-video-initialized")
+    Barracuda.elements.lazyVideos.push(element)
+  })
+
+  /* Barracuda Rich media (video, 3D)*/
+  document.querySelectorAll(".barracuda-richmedia:not(.barracuda-richmedia-initialized)").forEach(element=>{
+    element.classList.add("barracuda-richmedia-initialized")
+    if(element.dataset.mediaid && !Barracuda.elements.richMedia[element.dataset.mediaid]){
+      Barracuda.elements.richMedia[element.dataset.mediaid] = new BarracudaRichMedia(element);
+    }else{
+      if(!element.dataset.mediaid)
+        console.error("Barracuda: Rich media need a defined dataset.mediaid", element);
+    }
+  })
+
+  /* Barracuda select */
+  document.querySelectorAll(".barracuda-select:not(.barracuda-select-initialized)").forEach(element=>{
+    element.classList.add("barracuda-select-initialized");
+    var def_val = element.querySelector("select")? element.querySelector("select").dataset.default : false;
+    if(def_val)
+      element.querySelectorAll("option").forEach((value, key) => {
+        if(value.innerText == def_val){
+          element.querySelector("select")? element.querySelector("select").selectedIndex = ""+key : false;   
+        }
+      })
+  });
+
+  /* Product-lightbox load */
+  document.querySelectorAll(".use-product-lightbox:not(.use-product-lightbox-initialized)").forEach(el=>{
+    el.classList.add("use-product-lightbox-initialized");
+    el.addEventListener("click",(e)=>{
+      prevent(e);
+      console.log('LIGHTBOX DISABLED ');
+      if(e.currentTarget.classList.contains('token--gated')){
+        Barracuda.quickAddTokenGated(e.currentTarget);
+        return;
+      }
+      if(e.currentTarget.classList.contains('quick--add')){
+        const variant_id=e.currentTarget.dataset.variantId;
+        Barracuda.quickAdd(variant_id);
+        return;
+      }
+      var currentContent = document.querySelector(".overlay-content-content>form, .overlay-content-content>div");
+      if(currentContent && currentContent.dataset.source){
+         var t = document.querySelector("#"+currentContent.dataset.source);
+         /* console.log("Return this: ", currentContent, " into this: ", t); */
+         if(t) t.appendChild(currentContent);
+      }
+
+      document.querySelector(".overlay-content").innerHTML = "";
+      document.querySelector(".overlay-content").classList.add("loading")
+      document.querySelector("body").classList.add("show-overlay");
+      lockBodyPosition();
+      axios.get('/products/'+el.dataset.product+'?sections=product-lightbox')
+      .then(function (response) {
+        var code = response.data? (response.data['product-lightbox']? response.data['product-lightbox'] : false):false;
+        if (code){
+          document.querySelector(".overlay-content").classList.remove("loading")
+          document.querySelector(".overlay-content").innerHTML = code;
+          Barracuda.elements.init();
+          cart.appendAddToCartButton(document.querySelector(".overlay-content").querySelector(".barracuda-cart-addToCartButton"));
+        } 
+      })
+      .catch(function (error) {
+        document.querySelector("body").classList.remove("show-overlay");
+        document.querySelector(".overlay-content").classList.remove("loading")
+        unlockBodyPosition();
+        console.log(error);
+      });
+      return false;
+    },false)
+  });
+
+
+  /* Barracuda search  */
+  if(document.querySelector(".barracuda-search-input:not(.initialized)")){
+    document.querySelector(".barracuda-search-input").classList.add("initialized");
+    var search = new BarracudaSearch(
+        document.querySelector(".barracuda-search-input"),
+        document.querySelector(".barracuda-search-submit"),
+        document.querySelector(".barracuda-search-close"),
+        document.querySelector(".barracuda-search-target")
+        );
+  }
+
+  if(document.querySelector(".barracuda-search-page-input:not(.initialized)")){
+    document.querySelector(".barracuda-search-page-input").classList.add("initialized");
+    var searchPage = new BarracudaSearch(
+      document.querySelector(".barracuda-search-page-input"),
+      document.querySelector(".barracuda-search-page-submit"),
+      document.querySelector(".barracuda-search-page-close"),
+      document.querySelector(".barracuda-search-page-target")
+    );
+  }
+}
+
+
+/* Barracuda cart */
+if(typeof BarracudaCart !== 'undefined' )
+{
+  var cart = new BarracudaCart(
+    document.querySelector(".barracuda-cart-opener"),
+    document.querySelector(".barracuda-cart-target"),
+    document.querySelector("#page-content>div.main-cart-content")
+  )
+  Barracuda.themeCart = cart;
+}
+
+
+/* Initial barracuda Objects */
+Barracuda.elements.init();
+/* Inicialize for Dynamic elements */
+Barracuda.init();
+
+/* Filtr popup dots */
+Barracuda.checkFilter = function (e){
+  var filter = e.target.closest(".filter-line");
+  if(filter.querySelector("input:checked")){
+    filter = filter.querySelector(".inactive-filter:not(.active-filter)")
+    if( filter)
+      filter.classList.add("active-filter");
+  }else{
+    filter = filter.querySelector(".inactive-filter.active-filter")
+    if( filter)
+      filter.classList.remove("active-filter");
+  }
+}
+
+//need to enable the button for slow loads
+function initAtcButtonTokenGated() {
+  const btnArray=document.querySelectorAll('button.barracuda-cart-addToCartButton');
+  if(!btnArray) return;
+  btnArray.forEach((el)=>{
+    el.classList.remove('disabled');
+  })
+}
+
+
+initAtcButtonTokenGated();
+
+Barracuda.initFreeRedeem();
+Barracuda.initModal();
+Barracuda.PreOrderApp.init();
+
+// Barracuda.PreOrderApp.sendTestRequest().then(console.log);
+// Barracuda.PreOrderApp.createCustomer();
+
+

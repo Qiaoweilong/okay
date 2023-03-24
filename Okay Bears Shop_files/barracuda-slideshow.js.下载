@@ -1,0 +1,297 @@
+class BarracudaSlideshow{
+    constructor(element, time = 500){
+        this.debug = false;
+        if(element){
+            this.slideshow = element;
+            /* add gestures */
+            if(typeof Swipe !== 'undefined')
+                new Swipe(this.slideshow);
+
+            this.data = element.dataset;
+            this.classList = element.classList;
+            this.time = time;
+
+            this.init();
+        }else
+            console.error("BarracudaSlideshow: Construct must contains element!");
+    }
+    init(){
+
+        /* if we work with testimonials, we need set element height */
+        if(this.slideshow.classList.contains("testimonials")){
+            setTimeout(()=>{
+                this.setTestimonialsHeight();
+                window.addEventListener("resize", this.setTestimonialsHeight.bind(this));
+            },10)
+           
+        }
+
+        /* create controls */
+        this.controls();
+
+        /* initializated start position */
+        this.current = {
+            "int": this.data.start? parseInt(this.data.start) : 1,
+            "element": this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child("+(this.data.start? this.data.start : 1)+")")
+        }
+        if(this.current.element){ /* test for empty slideshow */
+            this.current.element.classList.add("current");
+            this.defineColors(this.current.element);
+            this.refreshControls(this.current.int);
+        }
+
+        /* initializade slideshow length */
+        this.length = parseInt(this.slideshow.querySelectorAll(".barracuda-slideshow-slide").length);
+
+        /* set lock */
+        this.lock = false;
+
+        /* set autoplay */
+        this.autoplay = this.data.autoplay? this.data.autoplay : false;
+        this.timeout = null;
+        if(this.autoplay)
+            this.start();
+
+        /* add swipe listeners */
+        this.slideshow.addEventListener("swipe",this.swipe.bind(this));
+
+        this.classList.add("barracuda-slideshow-initialized");
+    }
+
+    setTestimonialsHeight(){
+        var x = 0;
+        this.slideshow.querySelectorAll(".slide-content .text-frame>div").forEach(el=>{
+            if(el.scrollHeight > x) x = el.scrollHeight; 
+        });
+        x + this.slideshow.querySelector(".barracuda-slideshow-controls").scrollHeight;
+        if(this.controls.hidden){
+            /* without dots (controls) */
+            this.slideshow.style.height = "calc("+ x + "px)";
+        }else{
+            /* with dots (controls) */
+            this.slideshow.style.height = "calc(48px + "+ x + "px)";
+        }
+    }
+
+    swipe(e){
+        if(e.detail && e.detail.direction){
+            switch (e.detail.direction) {
+                case "left":
+                    this.prev();
+                    break;
+                case "right":
+                    this.next();
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    prev(useAnimation = true){
+        var temp = this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child("+(this.current.int - 1)+")")
+        if(temp)
+            var prev = {
+                "int": this.current.int - 1,
+                "element": temp
+            }
+        else
+            var prev = {
+                "int": this.length,
+                "element": this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child("+(this.length)+")")
+            }
+
+        this.setPosition(prev, useAnimation);
+    }
+
+    next(useAnimation = true){        
+        var temp = this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child("+(this.current.int + 1)+")")
+        if(temp)
+            var next = {
+                "int": this.current.int + 1,
+                "element": temp
+            }
+        else
+            var next = {
+                "int": 1,
+                "element": this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child(1)")
+            }
+
+        this.setPosition(next, useAnimation);
+    }
+
+    set(index, useAnimation = true){
+        index = parseInt(index);
+        var temp = this.slideshow.querySelector(".barracuda-slideshow-slide:nth-child("+index+")")
+        if(temp){
+            if(this.autoplay){
+                this.stopAutoplay();
+            }
+            this.autoplay = false;
+            this.setPosition({
+                "int": index,
+                "element": temp
+            }, useAnimation);
+        }else
+            console.error("BarracudaGallery: Slide with index "+ index + "doesn't exists");
+    }
+
+    setPosition(to, useAnimation = true){
+        if(!this.lock){
+            if(this.current.int != to.int){
+                this.lock = true;
+                this.stop();
+
+                this.refreshControls(to.int);
+
+                var after = function(){
+                    this.current = to;
+
+                    if(this.autoplay)
+                    this.start();
+
+                    this.lock = false;
+                }.bind(this);
+                
+                if(useAnimation){
+                    to.element.classList.add("before-current");
+                    this.current.element.classList.add("after-current")
+                    setTimeout(()=>{
+                        this.defineColors(to.element);
+                        to.element.classList.add("pre-current");
+                        setTimeout(()=>{
+                            to.element.classList.add("current");
+                            to.element.classList.remove("before-current", "pre-current");
+                            this.current.element.classList.remove("current", "after-current");
+                            after()
+                        },this.time)
+                    },1)
+                }else{
+                    this.defineColors(to.element);
+                    to.element.classList.add("current");
+                    this.current.element.classList.remove("current");
+                    after()
+                }
+
+            }
+        }else
+            console.warn("BarracudaGallery: Too fast, slideshow is locked.",to.int);
+    }
+
+    start(){
+        this.autoplay = this.data.autoplay? this.data.autoplay : false;
+
+        this.slideshow.classList.add("slideshow-playing");
+        this.slideshow.classList.remove("slideshow-stopped");
+        
+        this.timeout = setTimeout(this.next.bind(this), this.autoplay);
+    }
+    stop(){
+        clearTimeout(this.timeout);
+    }
+    stopAutoplay(){
+        if(this.slideshow.classList.contains("slideshow-playing")){
+            this.slideshow.classList.add("slideshow-stopped");
+            this.slideshow.classList.remove("slideshow-playing");
+        }
+        this.stop();
+    }
+
+    defineColors(targetElement){
+        if(!this.data.disablecolors){
+            if(targetElement.classList.contains("inverted")){
+                this.slideshow.parentElement.classList.add("use-inverted-colors")
+                this.slideshow.classList.add("use-inverted-colors")
+            if(this.slideshow.offsetTop == 0)
+                document.querySelector("body").classList.add("use-inverted-colors")
+            }else{
+                this.slideshow.parentElement.classList.remove("use-inverted-colors")
+                this.slideshow.classList.remove("use-inverted-colors")
+                if(this.slideshow.offsetTop == 0)
+                    document.querySelector("body").classList.remove("use-inverted-colors")
+            }
+            if(Barracuda.elements.Overlapping)
+                Barracuda.elements.Overlapping.check();
+        }
+    }
+    controls(){
+        /* main container */
+        this.controls = {
+            "element": this.slideshow.querySelector(".barracuda-slideshow-controls"),
+            "dots": this.slideshow.querySelector(".barracuda-slideshow-controls-dots"),
+            "dotTemplate": this.slideshow.querySelector(".barracuda-slideshow-controls-dot"),
+            "playIcon": this.slideshow.querySelector(".barracuda-slideshow-controls-play"),
+            "pauseIcon": this.slideshow.querySelector(".barracuda-slideshow-controls-pause"),
+            "hidden" : false
+        };
+
+        this.controls.dots.innerHTML = "";
+        if(this.controls.playIcon && this.controls.pauseIcon){
+            this.controls.dots.appendChild(this.controls.playIcon);
+            this.controls.playIcon.addEventListener("click",this.start.bind(this));
+
+            this.controls.dots.appendChild(this.controls.pauseIcon);
+            this.controls.pauseIcon.addEventListener("click",this.stopAutoplay.bind(this));}
+
+        this.slideshow.querySelectorAll(".barracuda-slideshow-slide").forEach((element, index) => {
+            var temp = this.controls.dotTemplate.cloneNode();
+            temp.addEventListener("click",(()=>{
+                    this.set((index + 1));
+                    this.stop();
+                }).bind(this));
+            this.controls.dots.appendChild(temp);
+        });
+
+        if(this.slideshow.querySelectorAll(".barracuda-slideshow-slide").length <= 1){
+            this.controls.dots.classList.add("hide");
+            if(this.controls.element && this.controls.element.childElementCount <= 1 && this.controls.element.querySelector(".barracuda-slideshow-controls-dots")){
+                this.controls.element.classList.add("hide");
+                this.controls.hidden = true;
+            }
+        }
+    }
+    refreshControls(position = 1){
+        if(this.slideshow.querySelector(".barracuda-slideshow-controls-dot.active"))
+            this.slideshow.querySelector(".barracuda-slideshow-controls-dot.active").classList.remove("active");
+        if(this.data.autoplay){     
+            if(this.slideshow.querySelector(".barracuda-slideshow-controls-dot:nth-of-type("+(2 + position)+")"))
+                this.slideshow.querySelector(".barracuda-slideshow-controls-dot:nth-of-type("+(2 + position)+")").classList.add("active");
+        }else{
+            if(this.slideshow.querySelector(".barracuda-slideshow-controls-dot:nth-of-type("+position+")"))
+                this.slideshow.querySelector(".barracuda-slideshow-controls-dot:nth-of-type("+position+")").classList.add("active");
+        }
+        
+        function dotsVisibility(dots, from = null, to = null){
+            if(dots.length>0){
+                dots.forEach(dot=>{
+                    dot.classList.remove("end");
+                    dot.classList.add("visible");
+                })
+                if(from){
+                    for (let i = 0; i < from; i++) {      
+                        if(dots[i]) dots[i].classList.remove("visible");
+                    }
+                    if(dots[from]) dots[from].classList.add("end");
+                }
+                if(to){
+                    for (let i = to; i < dots.length; i++) {
+                        if(dots[i]) dots[i].classList.remove("visible");
+                    }
+                    if(dots[(to-1)] && (to != dots.length)) dots[(to-1)].classList.add("end");
+                }
+            }
+        }
+        var dots = this.slideshow.querySelectorAll(".barracuda-slideshow-controls-dot")
+        var visibleDots = 5; // count of visible dots
+        var dotsCount = dots.length;
+        // postion - active dot
+        // dots - all dots
+        if(this.length <= visibleDots)
+            dotsVisibility(dots);
+        else if(position < 3)
+            dotsVisibility(dots,null,visibleDots);
+        else if((position + 2)> this.length)
+            dotsVisibility(dots,(dotsCount-visibleDots),null);
+        else
+            dotsVisibility(dots,(position - 3),(position + 2))
+    }
+}

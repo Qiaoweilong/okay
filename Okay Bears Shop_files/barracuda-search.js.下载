@@ -1,0 +1,48 @@
+class BarracudaSearch{
+    constructor(input, submit, close, target){
+        this.input = input;
+        this.input.classList.add("barracuda-search-initialized");
+        this.submit = submit;
+        this.close = close;
+        this.target = target;
+        this.debouncer = null;
+        this.debug = false;
+
+        if(this.input.closest("form"))
+            this.input.closest("form").addEventListener("keydown", (function(event) {
+                if (event.keyCode === 13) {
+                    prevent(event)
+                    this.change(event,true);
+                }
+            }).bind(this));
+        this.input.addEventListener("keyup", this.change.bind(this));
+        this.close.addEventListener("click", this.clear.bind(this));
+    }
+    clear(){
+        this.input.value = "";
+        this.close.classList.add("hidden");
+        this.submit.classList.remove("hidden");
+        if(this.target)
+            this.target.innerHTML = ""
+        else
+            this.submit.dispatchEvent(new Event("click"));
+
+        this.input.focus()
+    }
+    change(event, debouncer = false){
+        if(!debouncer){
+            clearTimeout(this.debouncer);
+            this.debouncer = setTimeout((()=>{this.change(event,true)}).bind(this),800);
+        }else{
+            if(this.input.value != ""){
+                this.submit.classList.add("hidden");
+                this.close.classList.remove("hidden");
+                this.submit.dispatchEvent(new Event("click"));
+            }else{
+                this.submit.classList.remove("hidden");
+                this.close.classList.add("hidden");
+                this.submit.dispatchEvent(new Event("click"));
+            }
+        }
+    }
+}

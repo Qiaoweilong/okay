@@ -1,0 +1,73 @@
+class Swipe{
+    constructor(object){
+        if(object){
+            this.object = object;
+            this.threshold = 50; //required min distance traveled to be considered swipe
+            this.allowedTime = 250; // maximum time allowed to travel that distance
+            this.moveEnd = true;
+
+            this.object.addEventListener('touchstart', this.touchStart.bind(this), { passive: true} );
+            this.object.addEventListener('touchend', this.touchEnd.bind(this), { passive: true} );
+        }else{
+            console.error("Swipe need DOM object input")
+        }
+    }
+
+    touchStart(e){
+        /* console.log("touchStart");
+        console.log(e); */
+
+        this.moveEnd = false
+        var touchobj = e.changedTouches[0]
+        this.dist = 0
+        this.startX = touchobj.pageX
+        this.startY = touchobj.pageY
+        this.startTime = new Date().getTime() 
+    }
+    touchEnd(e){
+        if(!this.moveEnd){
+            this.moveEnd = true;
+
+            /* console.log("touchend");
+            console.log(e); */
+
+            var touchobj = e.changedTouches[0]
+            this.dist = touchobj.pageX - (this.startX ? this.startX : 0); // get total this.dist traveled by finger while in contact with surface
+            var elapsedTime = new Date().getTime() - (this.startTime? this.startTime : 0) // get time elapsed
+            
+            /* console.log(elapsedTime); */
+
+            // check that elapsed time is within specified, horizontal this.dist traveled >= threshold, and vertical this.dist traveled <= 100
+            var swiperightBol = (elapsedTime <= this.allowedTime && Math.abs(this.dist) >= this.threshold && Math.abs(touchobj.pageY - this.startY) <= 100)
+            
+            var dir_str = "none";
+            var dir_int = 0;
+            if(swiperightBol){
+                if(this.dist > 0){
+                    dir_str = "right";
+                    dir_int = 1;
+                }else{
+                    dir_str = "left";
+                    dir_int = 2;
+                }
+                var _e = new CustomEvent("swipe", {
+                    target : e.target,
+                    detail: {		
+                        direction : dir_str,
+                        direction_int : dir_int
+                    },
+                    bubbles: true,
+                    cancelable: true
+                });
+
+                /* console.log("SWIPE: "+dir_str); */
+                this.trigger(e.target,"swipe",_e);			
+            }
+        }
+    }
+    trigger(elem, name, event) {
+    
+        elem.dispatchEvent(event);
+        eval(elem.getAttribute('on' + name));
+    }
+}

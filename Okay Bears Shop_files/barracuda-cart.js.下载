@@ -1,0 +1,285 @@
+class BarracudaCart{
+    constructor(opener, target, cartPage){
+        this.debug = false;
+        if(opener && target){
+            this.opener = opener;
+            this.target = target;
+            this.counterContainer = this.opener.querySelector(".count-container");
+            this.counter = this.opener.querySelector(".count")
+            this.timer = null
+            this.cartPage = cartPage;
+
+            console.log("Cart page:",this.cartPage);
+            this.init();
+            if(this.cartPage)
+                this.initButtonsInLines();
+        }else{
+            console.error("Barracuda Cart need opener and target element")
+        }
+    }
+    init(){
+        /* when click on cart opener, refresh content */
+        this.opener.addEventListener("click",this.refreshCart.bind(this));
+
+        /* find all addToCart buttons on page and change them to ajax */
+        document.querySelectorAll(".barracuda-cart-addToCartButton").forEach(button=>{
+            this.appendAddToCartButton(button);
+        })
+
+    }
+    appendAddToCartButton(element){
+        element? element.addEventListener("click",this.addToCart.bind(this)): false;
+    }
+    initButtonsInLines(){
+        // all buttons in cart topbar
+        this.target.querySelectorAll(".barracuda-cart-removeButton").forEach(button=>{
+            button.addEventListener("click",this.removeFromCart.bind(this));
+        })
+        this.target.querySelectorAll(".barracuda-cart-quantityInput").forEach(input=>{
+            new BarracudaCount(input);
+            input.addEventListener("change",this.setQuantityCart.bind(this));
+        })
+
+        // and all buttons in cart page (if exists)
+        if(this.cartPage){
+            this.cartPage.querySelectorAll(".barracuda-cart-removeButton").forEach(button=>{
+                button.addEventListener("click",this.removeFromCart.bind(this));
+            })
+            this.cartPage.querySelectorAll(".barracuda-cart-quantityInput").forEach(input=>{
+                new BarracudaCount(input);
+                input.addEventListener("change",this.setQuantityCart.bind(this));
+            })
+        }
+
+        Barracuda.init(); // init collapsible
+    }
+    getCart(){
+        this.target.classList.add("loading");
+        axios.get('/cart.js')
+        .then(function (response) {
+            this.target.classList.remove("loading");
+            if(response.data['item_count']) this.refreshCartIcon(response.data['item_count']) 
+                else this.refreshCartIcon(0);
+        }.bind(this))
+        .catch(function (error) {
+            this.target.classList.remove("loading");
+            console.error(error);
+        });
+    }
+    refreshCartIcon(count = null){
+        if(count != null){
+            if(count > 0){
+                this.counter.innerText = ""+count;
+                this.counterContainer.classList.remove("hide");
+            }else{
+                this.counter.innerText = "0";
+                this.counterContainer.classList.add("hide");
+            }
+            var opener = this.opener;
+
+        }else{
+            this.getCart();
+        }
+    }
+    refreshCart(){
+        axios.get('/cart?sections=main-cart')
+        .then(function (response) {
+            var code = response.data? (response.data["main-cart"]? response.data["main-cart"] : false ):false;
+            if (code){
+                this.target.innerHTML = code;
+                this.target.classList.remove("hide");
+                if(this.cartPage){
+                    this.cartPage.innerHTML = code;
+                }
+                this.initButtonsInLines();
+            }
+        }.bind(this))
+        .catch(function (error) {
+            console.error(error);
+        });
+    }
+    async addToCart(e, item = null, count = 1, plans = null){
+        if(this.timer){
+            clearTimeout(this.timer);
+        }
+        var form = e.target.closest("form");
+        const atcBtn=e.currentTarget;
+        form.classList.add("adding-to-cart");
+
+        if(item==null) item = parseInt(form.querySelector("select[name=id]").value)
+        if(form.querySelector("input[name=quantity]")) count = parseInt(form.querySelector("input[name=quantity]").value)
+        if(form.querySelector("select[name=selling_plan]")) plans = parseInt(form.querySelector("select[name=selling_plan").value);
+
+        var maxCount = null
+        console.log(form.querySelector("select[name=id] option[selected]"))
+        if(form.querySelector("select[name=id]") && form.querySelector("select[name=id] option[selected]").dataset.max) {
+            maxCount = parseInt(form.querySelector("select[name=id] option[selected]").dataset.max)
+        }
+
+        prevent(e);
+        
+        if((maxCount == null || maxCount < 0 || count <= maxCount)) {
+            if(!form.dataset.sellingPlan){
+                prevent(e);
+                if (this.debug) console.log("Barracuda Cart - addToCart", item, count, plans, "event: ", e);
+    
+                var data = {
+                  items: [
+                    {
+                      quantity: count,
+                      id: item,
+                    },
+                  ],
+                };     
+    
+                if (plans != null && plans!=""){
+                    data.items[0].selling_plan = plans
+                }    
+
+                //token gated 
+                if(form.classList.contains('token-gated')){
+
+                    form.classList.remove("adding-to-cart");
+        
+                    let response= await Barracuda.initiateWallet('pdp');
+
+                    if(response.status===true && form.classList.contains('preorder')){
+                        atcBtn.setAttribute('disabled','');
+                        atcBtn.innerText='Connected!';
+                    }
+         
+                    document.dispatchEvent(
+                      new CustomEvent("modal:open", {
+                        detail: { wallet: response, atc: data, form:form },
+                      })
+                    );
+                    return;
+        
+                }
+    
+                axios.post('/cart/add.js',data)
+                .then(function (response) {
+                    if (this.debug) console.log("Barracuda Cart - added to cart", response);
+                    this.refreshCartIcon()
+                    this.animateCartIcon()
+                    if(this.cartPage) this.refreshCart();
+                    form.classList.remove("adding-to-cart");
+                    form.classList.add("added-to-cart");
+
+                    var targetProduct = form.closest(".product-form");
+                    
+                    if(targetProduct && targetProduct.querySelector(".cant-add-more")){
+                        targetProduct.querySelector(".cant-add-more").classList.add("visually-hidden");
+                    }
+                    if(targetProduct && targetProduct.querySelector(".cant-add-other")){
+                        targetProduct.querySelector(".cant-add-other").classList.add("visually-hidden");
+                    }
+
+                    unlockBodyPosition();
+                    document.querySelector("body").classList.remove("show-overlay");
+                }.bind(this))
+                .catch(function (error) {
+                    form.classList.remove("adding-to-cart");
+                    form.classList.add("error-when-adding-to-cart");
+                    console.error(error);
+                    var targetProduct = form.closest(".product-form");
+                    if(error.response.status = "422" && targetProduct && targetProduct.querySelector(".cant-add-other span.message")){
+                        targetProduct.querySelector(".cant-add-other span.message").innerHTML = error.response.data.description;
+                        targetProduct.querySelector(".cant-add-other").classList.remove("visually-hidden");
+                        setTimeout(function(){
+                            targetProduct.querySelector(".cant-add-other").classList.add("visually-hidden");
+                        },5000);
+                    }
+                });
+            }
+        }else{
+            prevent(e);
+            var targetProduct = form.closest(".product-form");
+            if(targetProduct && targetProduct.querySelector(".cant-add-more")){
+                targetProduct.querySelector(".cant-add-more").classList.remove("visually-hidden");
+                this.timer = setTimeout(function(){
+                    targetProduct.querySelector(".cant-add-more").classList.add("visually-hidden");
+                    if(form.querySelector("input[name=quantity]")) form.querySelector("input[name=quantity]").value = maxCount;
+                },5000);
+            }
+            form.classList.remove("adding-to-cart");
+            form.classList.add("error-when-adding-to-cart");
+        }
+        
+    }
+    removeFromCart(e){
+        prevent(e)
+        this.setQuantityCart(e, null, 0);
+    }
+    setQuantityCart(e, id= null, quantity = null){
+        if(this.timer){
+            clearTimeout(this.timer);
+        }
+
+        if(id == null) id = e.target.closest(".item-line").dataset.id;
+        if(quantity == null) quantity = e.target.closest("input").value;
+        var maxCount = null 
+        if(e.target.closest("input") && e.target.closest("input").dataset.max){
+            maxCount = parseInt(e.target.closest("input").dataset.max);
+        }
+
+        if(maxCount == null || maxCount < 0 || quantity <= maxCount){
+            /* create fade for item-line in cart, when user remove last item from line. */ 
+            if(quantity == 0){
+                var line = e.target.closest(".item-line")
+                line.style.height = line.scrollHeight + "px";
+                line.classList.add("item-line-removed");
+                setTimeout(()=>{
+                    line.style.height = "0px";
+                },10);
+            }
+
+            prevent(e)
+            setTimeout(()=>{
+                var data = {'updates' : {}};
+                data['updates'][id] = quantity;
+
+                    axios.post('/cart/update.js',data)
+                    .then(function (response) {
+                        
+                        this.refreshCart();
+                        this.refreshCartIcon();
+                    }.bind(this))
+                    .catch(function (error) {
+                        console.error(error);
+                    });
+            },400);
+        }else{
+            console.warn("You can't add more then "+maxCount+" item/items to the cart.");
+            var cantAdd =  e.target.closest(".item-line").querySelector(".cant-add-more")
+            if(cantAdd){
+                cantAdd.classList.remove("visually-hidden");
+            }
+
+            this.timer = setTimeout(function(){
+                setTimeout(()=>{
+                    e.target.closest("input").value = maxCount;
+                    var data = {'updates' : {}};
+                    data['updates'][id] = maxCount;
+
+                        axios.post('/cart/update.js',data)
+                        .then(function (response) {
+                            this.refreshCart();
+                            this.refreshCartIcon();
+                        }.bind(this))
+                        .catch(function (error) {
+                            console.error(error);
+                        });
+                },400);
+            }.bind(this),5000);
+        }
+    }
+    animateCartIcon(){
+        document.querySelector("body").classList.remove("scroll-down")
+        document.querySelector("body").classList.add("scroll-top")
+        this.counterContainer.classList.remove("animate");
+        setTimeout(()=>{
+        this.counterContainer.classList.add("animate");
+        },5)
+    }
+}

@@ -1,0 +1,1680 @@
+/* Prepare Barracuda funcitons set */
+var Barracuda = {};
+
+/* general functions */
+function prevent(event) {
+   if (event) event.preventDefault();
+}
+
+/* Show window dimensions in corner */
+Barracuda.createStats = function (){
+   var stats = document.querySelector(".stats");
+   if(stats){
+      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
+      const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
+      const scrollbarWidth = window.innerWidth - document.body.clientWidth;
+      stats.innerHTML = "" + vw + " px<br>"+ vh +" px<br>"+ (scrollbarWidth>30? "<s>"+scrollbarWidth+"px</s>": scrollbarWidth + "px");
+      
+      if(document.querySelector(".overlay")){
+      document.querySelector(".overlay").style.width = vw + "px";
+      document.querySelector(".overlay").style.height = vh + "px";
+      }
+   }
+}
+
+/* Cookies functions */
+function getCookie(cname) {
+   let name = cname + "=";
+   let decodedCookie = decodeURIComponent(document.cookie);
+   let ca = decodedCookie.split(';');
+   for(let i = 0; i <ca.length; i++) {
+   let c = ca[i];
+   while (c.charAt(0) == ' ') {
+      c = c.substring(1);
+   }
+   if (c.indexOf(name) == 0) {
+      return c.substring(name.length, c.length);
+   }
+   }
+   return "";
+}
+function setCookie(cname, cvalue, exdays) {
+   const d = new Date();
+   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+   let expires = "expires="+d.toUTCString();
+   document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+}
+
+/* overlay actions */
+function overlayClick(event, force = false) {
+   if (force || (event.target.classList && (event.target.classList.contains("overlay") || event.target.closest("a") && event.target.closest("a").classList.contains("overlay-closer"))) )
+   { document.querySelector("body").classList.remove("show-overlay");
+   unlockBodyPosition();}
+}
+
+/* Topbar actions */
+function openTopbar(event, targetName){
+   prevent(event);
+   target = document.getElementById(targetName);
+   if(target){ 
+      target.removeAttribute("hidden");
+      setTimeout(function(){
+         target.classList.add("visible");
+         if(targetName == "menu"){ 
+            setTimeout(Barracuda.elements.mainMenu.hideMenuLinks.bind(Barracuda.elements.mainMenu), 2); 
+            setTimeout(Barracuda.elements.mainMenu.showMenuLinks.bind(Barracuda.elements.mainMenu), 150)
+         }
+         lockBodyPosition();
+         var focusTarget = target.querySelector(".topbar-focus");
+         if(focusTarget){ 
+            focusTarget.focus();
+         }
+      },50)
+   }
+}
+function closeTopbar(event) {
+   document.querySelectorAll(".topbar.visible").forEach(el=>{
+
+      el.classList.remove("visible");
+      setTimeout(function(){el.setAttribute("hidden", true)}, 600);
+   })
+   if(document.querySelector(".topbar #auth-form"))
+      document.querySelector(".topbar #auth-form").innerHTML = "";
+   unlockBodyPosition();
+}
+
+/* Functions for blocking scroll when overlay is visible */
+function noScroll(event) {
+   var inside = event.target.closest(".scroll-inside");
+   if(inside && event.deltaY){
+      if(event.deltaY > 0 && inside.scrollTop + inside.offsetHeight < inside.scrollHeight){
+      }else if(event.deltaY < 0 && inside.scrollTop > 0){
+      }else{
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();}
+   }
+}
+function noScrollTouchMove(event) {
+   var inside = event.target.closest(".scroll-inside");
+   if(inside){
+      var noScrollTouchEnd = event.changedTouches[0].clientY;
+      if (noScrollTouchStartClientY > noScrollTouchEnd && inside.scrollTop + inside.offsetHeight < inside.scrollHeight) {
+      } else if ((noScrollTouchStartClientY < noScrollTouchEnd) && inside.scrollTop > 0) {
+      }else{
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();}
+   }
+}
+function noScrollTouchStart(event){
+   noScrollTouchStartClientY = event.touches[0].clientY
+}
+
+var bodyPostionY = null;
+var noScrollTouchStartClientY = null;
+/* lock body scroll */
+function lockBodyPosition() {
+      Barracuda.setScrollBarWidth();
+      document.querySelector("body").classList.add("no-scroll");
+      // add listener to disable scroll
+      document.querySelectorAll(".scroll-inside").forEach(el=>{
+         el.addEventListener('mousewheel', noScroll, false);
+         el.addEventListener('touchstart', noScrollTouchStart, false);
+         el.addEventListener('touchmove', noScrollTouchMove, false);
+      });
+}
+function unlockBodyPosition() {
+   document.querySelector("body").classList.remove("no-scroll");
+   window.removeEventListener('mousewheel', noScroll);
+   window.removeEventListener('touchstart', noScrollTouchStart);
+   window.removeEventListener('touchmove', noScrollTouchMove);
+
+}
+
+/* menu actions */
+function openSubmenu(event){
+   prevent(event);
+   var parentLi = event.target.closest("li");
+   var height = parentLi.querySelector("ul").style.maxHeight
+
+   parentLi.classList.toggle("open");
+   if(height == "") parentLi.querySelector("ul").style.maxHeight = parentLi.querySelector("ul").scrollHeight + "px";
+   else parentLi.querySelector("ul").style.maxHeight = "";
+
+   var parentUl = event.target.closest("ul");
+   if(parentUl.classList.contains("child")) parentUl.style.maxHeight = (parentUl.scrollHeight + parentLi.querySelector("ul").scrollHeight) + "px";
+   
+}
+
+/* Fade functions */
+Barracuda.duration = 300;
+Barracuda.fadeOut = function(el, after = null, time = Barracuda.duration) {
+   if(!el.dataset.animated || el.dataset.animated == "false"){
+      el.dataset.animated = true;
+      el.style.opacity = 1;
+      (function fadeOutTemp(){
+            el.style.opacity = parseFloat(el.style.opacity) - .02
+         if ((el.style.opacity)<0){
+            el.classList.add("hide");
+            el.dataset.animated = false;
+            el.style.opacity = 0;
+            if(after) after();}
+         else {
+            setTimeout(fadeOutTemp,(time / 50))
+         }
+      })();
+   }
+};
+
+Barracuda.fadeIn = function(el, after = null, time = Barracuda.duration) {
+   if(!el.dataset.animated || el.dataset.animated == "false"){
+      el.dataset.animated = true;
+      el.style.opacity = 0;
+      el.classList.remove("hide");
+      (function fadeInTemp(){
+            el.style.opacity = parseFloat(el.style.opacity) + .02
+         if ((el.style.opacity)>1){
+            el.dataset.animated = false;
+            el.style.opacity = 1;
+            if(after) after();}
+         else {
+            setTimeout(fadeInTemp,(time / 50))
+         }
+      })();
+   }
+}
+
+/* Custom delay*/
+Barracuda.custDelay = (ms = 700) => new Promise(r => setTimeout(r, ms));
+
+/*Wallet connect */
+Barracuda.initiateWallet= async function(template='pdp'){
+
+
+      if (window.solana) {
+        console.log('Phantom wallet found!');
+
+        try {
+          var response = await window.solana.connect();
+         //  console.log(response,"RESPONSE")
+          console.log(
+                  'On Template: '+template+' Connected with Public Key:',
+                  response.publicKey.toString()
+                  );
+          window.publicKey = response.publicKey.toString();
+          return {
+            status: true,
+            message: response
+          };
+    
+          // get all tokens
+        } catch (e) {
+          return {
+            status: false,
+            message: "Please connect your wallet."
+          };
+        }
+    
+      } else {
+          return {
+            status: false,
+            message: "No wallet detected. Please install a Solana wallet."
+          };
+         //   alert("No wallet Detected. Please install Phantom Wallet.")
+      }
+
+      //
+      // var solanaWeb3 = window.solanaWeb3;
+      // var clusterApiUrl = window.solanaWeb3.clusterApiUrl
+      // var PublicKey = window.solanaWeb3.PublicKey;
+
+
+      // var connection = new solanaWeb3.Connection(clusterApiUrl("mainnet-beta"), "confirmed");
+
+      // var message = window.publicKey; // mint address
+      // var encodedMessage = new TextEncoder().encode(message); // unit8array
+      // var publicKeyWithSignature = await window.solana.signMessage(encodedMessage, "utf8");
+}
+
+/*refresh cart counf */
+Barracuda.updateCartCount = function(count){
+   const elCartCount=document.getElementById('GL-CartCount');
+   const currentCount=elCartCount.innerHTML;
+
+   elCartCount.innerHTML=parseInt(currentCount)+count;
+   elCartCount.parentElement.classList.remove('hide');
+
+}
+
+/*Quick ATC Barracuda*/
+Barracuda.quickAdd = function(variant_id){
+
+   // console.log('BarracudaCart',Barracuda.themeCart);
+   // axios.get('/cart.json').then(console.log);
+   axios.post('/cart/add.js',{
+         items: [
+            {
+             id: variant_id,
+             quantity: 1
+            }
+         ]
+      })
+   .then((res)=>{
+      const newCount=res.data.items.length;
+      console.log('SUCEESS quickadd',res.data,typeof newCount);
+      Barracuda.updateCartCount(newCount);
+      setTimeout(() => {
+         document.querySelector(".barracuda-cart-opener").click();
+      }, 10);
+      return res;
+
+   })
+   .catch(function (err) {
+      if(err?.response?.status === 422){
+         console.log(err.response.data);
+      }else{
+         console.log('Error:',err);
+      }
+    });
+
+}
+/*Quick ATC Token gated Barracuda*/
+Barracuda.quickAddTokenGated = async function(currentTarget){
+   const variant_id=currentTarget.dataset.variantId;
+   const productid=currentTarget.dataset.productid;
+
+   let response= await Barracuda.initiateWallet('pdp');
+
+   const data ={
+      items: [
+         {
+          id: variant_id,
+          quantity: 1
+         }
+      ]
+   };
+         
+   document.dispatchEvent(
+     new CustomEvent("modalheader:open", {
+       detail: { wallet: response, atc: data, isFreeRedeem: false ,productid: productid },
+     })
+   );
+
+}
+
+ /*Init Wallet EVnet */
+ Barracuda.initFreeRedeem= function(){
+   const elBtn=document.querySelector('#connectWallet');
+
+   if(!elBtn) return;
+ 
+   elBtn.addEventListener("click", async function (e) {
+     e.preventDefault();
+      const currentTarget=e.currentTarget;
+
+     let response= await Barracuda.initiateWallet('pdp');
+     const data ={
+        items: [
+           {
+            id: '43145997811950',
+            quantity: 1
+           }
+        ]
+     };
+     if (response.status === true) {
+
+      // console.log('TEST 2',wristBandExists);
+
+      //  currentTarget.setAttribute("disabled", "");
+      //  currentTarget.innerText = "Connected!";
+     }
+           
+     document.dispatchEvent(
+       new CustomEvent("modalheader:open", {
+         detail: { wallet: response, atc: data, isFreeRedeem: true, productid: "7756470649070" },
+       })
+     );
+
+   });
+ }
+
+/*Token Gated cart middleware*/
+Barracuda.tokenGatedNFT = async function (productid, publicWalletAddress) {
+  // const HARDCODE_BEAR_NFT='6Mv4TuJxuYEqktBuMp1uYvuAZcZCUrewVJke9V8Rw65V';
+  // const old_url='https://us-central1-okaybears-lazer.cloudfunctions.net/listNfts?test=';
+  const nft_endpoint =
+    "https://us-central1-okaybears-lazer.cloudfunctions.net/listNfts";
+  const built_params = `?productId=${productid}&publicWalletAddress=${publicWalletAddress}`;
+  const nft_url = nft_endpoint + built_params;
+
+  let response = await axios({
+    method: "get",
+    url: nft_url,
+  }).catch((err) => {
+    console.log(err?.reponse);
+    return [];
+  });
+
+  console.log("Responded! NFTList >_",{
+   params:built_params,
+   reponse:response?.data
+  });
+  return response?.data;
+};
+
+/* session storage system */
+Barracuda.G_storage = {
+
+  name: "G_storage",
+
+  set: function (data) {
+    var sendJSON = JSON.stringify(data);
+    localStorage.setItem(this.name, sendJSON);
+  },
+
+  get: function () {
+    var getJSON = localStorage.getItem(this.name);
+    return getJSON ? JSON.parse(getJSON) : null;
+  }
+};
+
+/*Modal */
+Barracuda.initModal = function () {
+  // Get the modal
+  const modal = document.getElementById("myModal");
+  const closeBtn = document.getElementsByClassName("close")[0];
+  const stepBtn = document.getElementById("modalNext");
+
+
+  var currentATC = null;
+
+  if (!closeBtn || !modal || !stepBtn) {
+    console.log("not found modal elements!");
+    return;
+  }
+
+  //register close modal
+  registerCloseModalEvents();
+
+  //Handle STep Btn clicks
+  stepBtn.onclick = stepBtnHandler;
+
+  // When the user clicks the button, open the modal
+  document.addEventListener("modal:open", modalOpenHandler);
+
+  // When the user clicks the button, open the modal
+  document.addEventListener("modalheader:open", modalHeaderOpenHandler);
+
+  // When the user clicks the button, open the modal
+  document.addEventListener("modalcheck:open", modalCheckOpenHandler);
+
+  //reset all steps
+  function resetSteps() {
+    const allSteps = modal.querySelectorAll(".steps");
+    allSteps.forEach(function (el) {
+      el.classList.add("hide");
+      el.innerHTML = "";
+    });
+
+    modal.querySelector(`.step--1`).classList.remove("hide");
+    stepBtn.dataset.step = 1;
+    stepBtn.classList.remove("disabled");
+    stepBtn.classList.remove("hide");
+    stepBtn.classList.remove("free--redeem");
+    modal.classList.remove("bears--check");
+    stepBtn.innerText = "Next";
+  }
+
+  //close Modal
+  function closeModal() {
+    modal.classList.remove("open");
+    document.body.classList.remove("no-scroll");
+  }
+
+  //update modal product id
+  function updateModalProductId(productid) {
+   modal.dataset.productid=productid;
+  }
+
+  //preorder Only
+  async function preorderOnly(form) {
+    const preorderForm = form.parentElement.querySelector(".preorder--form");
+    preorderForm.classList.add('btn--loading');
+    preorderForm.classList.remove("hide");
+
+    const data = await Barracuda.tokenGatedNFT(form.dataset.productid,window.publicKey);
+
+    if (data?.result?.okayBearNfts.length > 0) {
+      preorderForm.classList.remove("btn--loading");
+    } else {
+      preorderForm.classList.add("hide");
+    }
+  }
+
+  function registerCloseModalEvents() {
+    // When the user clicks on <span> (x), close the modal
+    closeBtn.onclick = function (e) {
+      closeModal();
+    };
+
+    // When the user clicks anywhere outside of the modal, close it
+    window.onclick = function (event) {
+      if (event.target == modal) {
+        closeModal();
+      }
+    };
+  }
+
+  async function stepBtnHandler(e) {
+
+    const allSteps = modal.querySelectorAll(".steps");
+    const currentTarget = e.currentTarget;
+    const currentStep = parseInt(currentTarget.dataset.step);
+    const currentStepEl = modal.querySelector(`.step--${currentStep}`);
+    const nextStep = currentStep + 1;
+    const nextStepEl = modal.querySelector(`.step--${nextStep}`);
+    const modalContent = document.querySelector(".modal-content");
+    const freeRedeemClassExists=currentTarget.classList.contains('free--redeem');
+    const bearsCheckClassExists=modal.classList.contains('bears--check');
+
+   //  console.log(currentStep,nextStep,'======')
+
+    //first step
+    if (currentStep === 1) {
+
+      if(bearsCheckClassExists){
+         const input=modalContent.querySelector('input[type=text]');
+         const productid=modal.dataset.productid;
+         const dotAV=document.querySelector(`span[data-dot="${productid}"]`)
+         const dotArray=['red-dot','green-dot','orange-dot'];
+
+         if(!input.value || input.value.length < 12){
+            input.classList.add('pre--error');
+            return;
+         }else{
+            input.classList.remove('pre--error');
+         }
+
+         modalContent.classList.add("btn--loading");
+         const elgData=await Barracuda.checkEligibility(productid,input.value);
+         const isEligible=elgData.result.eligibility.some(el=>el.canBeRedeemed===true);
+
+         console.log('Check Bears',isEligible,productid,elgData);
+
+         //close modal functionality
+         // closeModal();
+         // modalContent.classList.remove("btn--loading");
+         dotArray.forEach((cls) => dotAV.classList.remove(cls));
+
+         //add loading animation
+         if(isEligible===true){
+            dotAV.classList.add('green-dot')
+            currentStepEl.innerHTML=`<p>This Okay Bear can be redeemed for this product!</p>`;
+         }else{
+            dotAV.classList.add('orange-dot')
+            currentStepEl.innerHTML=`<p>This Okay Bear had already been redeemed for this product!</p>`;
+         }
+
+         modalContent.classList.remove("btn--loading");
+         stepBtn.classList.add('hide');
+
+         return;
+      }
+      
+      currentTarget.innerText = "Redeem and Add to Cart";
+      currentTarget.classList.add("disabled");
+      modalContent.classList.add("btn--loading");
+
+
+      if(!modal.dataset.productid || !window.publicKey){
+         // throw new Error('productid or publicKey not found');
+         modalContent.classList.remove("btn--loading");
+         console.log('productid or publicKey not found',modal.dataset.productid, window.publicKey);
+         return;
+      }
+      
+      const data = await Barracuda.tokenGatedNFT(modal.dataset.productid, window.publicKey);
+
+      let cartItems=null;
+
+      //WEN WRIST
+      if(freeRedeemClassExists){
+          cartItems = await axios
+         .get("/cart.json")
+         .then((res) => res.data.items)
+         .catch((err) => console.log(err));
+
+         console.log('ANDA',cartItems);
+      }
+
+      modalContent.classList.remove("btn--loading");
+      // console.log("Now", data, nextStepEl);
+
+      if (data.result.okayBearNfts.length > 0) {
+      //   console.log(data.result);
+        let dropdownHTML = data.result.okayBearNfts.map(
+          (el) =>
+            `<option value="${el.tokenAddress}" ${
+              el.canBeRedeemed == true ? "" : "disabled"
+            }>${el.name}${el.canBeRedeemed == true ? " (Not Redeemed)" : " (Redeemed)"}</option>`
+        );
+
+        dropdownHTML =
+          '<option value="false" selected>Choose One</option>' + dropdownHTML;
+        nextStepEl.innerHTML = `<p>Multiple Okay Bears found</p>
+                                  <select class="cust--select">
+                                  ${dropdownHTML}
+                                  </select>
+                                  `;
+
+        modal
+          .querySelector(".cust--select")
+          .addEventListener("change", function (evt) {
+            //free redeem on change functionality start
+            if (freeRedeemClassExists) {
+              const wristBandExists = cartItems.find((item) => {
+                return (
+                  item.id == "43145997811950" &&
+                  item.properties?._selectedNFT == evt.currentTarget.value
+                );
+              });
+              if (wristBandExists) {
+                currentTarget.classList.add("disabled");
+                return;
+              } else {
+                currentTarget.classList.remove("disabled");
+                return;
+              }
+            }
+            //free redeem on change functionality end
+
+            if (evt.currentTarget.value == "false") {
+              currentTarget.classList.add("disabled");
+            } else {
+              currentTarget.classList.remove("disabled");
+            }
+          });
+      } else {
+        nextStepEl.innerHTML = "<p>No eligible Okay Bears found</p>";
+        currentTarget.classList.add("disabled");
+      }
+
+      //second step
+    } else if (currentStep === 2) {
+      console.log("step 2:", currentATC);
+
+      const selectVal = modal.querySelector(".cust--select");
+
+      const selectedKey = selectVal?.value;
+
+      const decoderS = new TextDecoder();
+      const encoderS = new TextEncoder();
+      var message = window.publicKey; // mint address
+      var encodedMessage= encoderS.encode(message); // uint8array
+      var publicKeyWithSignature = await window.solana.signMessage(
+         encodedMessage,
+        "utf8"
+      );
+
+      // console.log('Hello Payload',message,encodedMessage,publicKeyWithSignature,selectedKey);
+
+      const privateProperties = {
+      //   _test:encodedMessage,
+        _encodedMessage: decoderS.decode(encodedMessage),
+        _publicKey: publicKeyWithSignature.publicKey,
+        _signature: publicKeyWithSignature.signature,
+        _selectedNFT: selectedKey,
+      };
+
+      currentATC.items[0]["properties"] = privateProperties;
+      console.log("Hello Payload", currentATC);
+
+      //cart add
+      await axios
+        .post("/cart/add.js", currentATC)
+        .then((res) => {
+          Barracuda.updateCartCount(res.data.items.length);
+          closeModal();
+          // nextStepEl.innerHTML='Success!';
+          currentTarget.classList.add("hide");
+          console.log("Success", res);
+
+          setTimeout(() => {
+            document.querySelector(".barracuda-cart-opener").click();
+          }, 10);
+          return res;
+        })
+        .catch(function (err) {
+          if (err?.response?.status === 422) {
+            console.log(err.response.data);
+            closeModal();
+          } else {
+            console.log("Error:", err);
+          }
+        });
+    }
+
+    //return if count exceeded
+    if (currentStep + 1 > allSteps.length) {
+      console.log("limit reached");
+      return;
+    }
+
+    allSteps.forEach(function (el) {
+      el.classList.add("hide");
+    });
+    //  console.log('clicked',typeof currentStep,allSteps.length);
+
+    currentTarget.dataset.step = nextStep;
+    nextStepEl.classList.remove("hide");
+  }
+
+  //PDP modal or preorder modal
+  async function modalOpenHandler(e) {
+    const detail = e.detail;
+    const form = detail.form;
+    const wallet = detail.wallet;
+    const preorder_only = form.classList.contains("preorder");
+    const product_id=form.dataset.productid;
+
+    updateModalProductId(product_id);
+    console.log('FORM FROM',product_id)
+
+    currentATC = detail.atc;
+
+    console.log("Event Details", wallet,stepBtn);
+
+    if (wallet.status === true && preorder_only === true) {
+      await preorderOnly(form);
+      return;
+    }
+    modal.classList.add("open");
+    document.body.classList.add("no-scroll");
+    resetSteps();
+
+    if(form.classList.contains('free--redeem')) stepBtn.classList.add('free--redeem');
+
+    if (wallet.status == false) {
+      stepBtn.classList.add("disabled");
+    }
+
+    const currentStep = parseInt(stepBtn.dataset.step);
+    const currentStepEl = modal.querySelector(`.step--${currentStep}`);
+
+    if (wallet.status === true) {
+      currentStepEl.innerHTML = `<p>Connected to wallet: ${wallet.message.publicKey}</p>`;
+    } else {
+      currentStepEl.innerHTML = "<p>" + wallet.message + "</p>";
+    }
+  }
+
+  //quick add/ free redeem modal
+  async function modalHeaderOpenHandler(e) {
+    const detail = e.detail;
+    const wallet = detail.wallet;
+    const isFreeRedeem = e.detail.isFreeRedeem;
+    const productid=e.detail.productid;
+    // const preorder_only=form.classList.contains('preorder')
+    updateModalProductId(productid);
+
+    currentATC = detail.atc;
+
+    console.log("Event Details", wallet);
+
+    modal.classList.add("open");
+    document.body.classList.add("no-scroll");
+    resetSteps();
+
+    if (wallet.status == false) {
+      stepBtn.classList.add("disabled");
+    }
+
+    const currentStep = parseInt(stepBtn.dataset.step);
+    const currentStepEl = modal.querySelector(`.step--${currentStep}`);
+
+    if (wallet.status === true) {
+      //Free redeem logic
+      if (isFreeRedeem === true) {
+        //check cart items and temporary disable next button
+
+        stepBtn.classList.add("free--redeem");
+
+        //WEN WRIST
+        currentStepEl.innerHTML = `<p>Connected to wallet: ${wallet.message.publicKey}</p>`;
+        return;
+
+      }
+
+      currentStepEl.innerHTML = `<p>Connected to wallet: ${wallet.message.publicKey}</p>`;
+    } else {
+      currentStepEl.innerHTML = "<p>" + wallet.message + "</p>";
+    }
+  }
+  async function modalCheckOpenHandler(e) {
+   const productid=e.detail.productid;
+   // const preorder_only=form.classList.contains('preorder')
+
+   resetSteps();
+   modal.classList.add("open");
+   document.body.classList.add("no-scroll");
+
+   //Bears CHeck indicator
+   modal.classList.add('bears--check');
+   updateModalProductId(productid);
+
+   const currentStep = parseInt(stepBtn.dataset.step);
+   const currentStepEl = modal.querySelector(`.step--${currentStep}`);
+
+   currentStepEl.innerHTML=`<p>Check an Okay Bear</p><input type="text" placeholder="Token Address"/>`;
+   stepBtn.innerText="Check";
+ }
+//   async function modalHandlerSkeleton(e) {
+//    const productid=e.detail.productid;
+//    // const preorder_only=form.classList.contains('preorder')
+
+//    resetSteps();
+//    modal.classList.add("open");
+//    document.body.classList.add("no-scroll");
+
+
+//    const currentStep = parseInt(stepBtn.dataset.step);
+//    const currentStepEl = modal.querySelector(`.step--${currentStep}`);
+//  }
+};
+
+ /* CHeck Eligibility*/
+ Barracuda.checkEligibility=async function(productid, tokenAddresses) {
+   console.log(
+     "checkEligibility params",
+     `?productId=${productid}&tokenAddresses=${tokenAddresses}`
+   );
+
+   const data=await axios
+     .get(`https://us-central1-okaybears-lazer.cloudfunctions.net/checkBears/?productId=${productid}&tokenAddresses=${tokenAddresses}`)
+     .then((res) => res.data)
+     .catch((err) => console.log("Err", err));
+
+     return data;
+
+ }
+ /* Preorder Form */
+Barracuda.PreOrderApp = {
+  formArray: document.querySelectorAll(".preorder--form"),
+
+  init: function () {
+    this.formArray.forEach((form) => {
+      const btn = form.querySelector(".preorder--submit");
+      const input = form.querySelector(".preorder--email");
+      const errorEl = form.querySelector(".preorder--form-error");
+
+      btn.addEventListener("click", async function (e) {
+        e.preventDefault();
+        const targetBtn = e.currentTarget;
+        const self=this;
+
+        function formError(text = "", status = true) {
+          if (status === true) {
+            input.classList.add("pre--error");
+            errorEl.classList.remove("hide");
+            errorEl.innerHTML = text;
+          } else {
+            input.classList.remove("pre--error");
+            errorEl.classList.add("hide");
+            errorEl.innerHTML = text;
+          }
+        }
+
+        if (self.utils.validateEmail(input.value)) {
+          // input.classList.remove('pre--error');
+          formError("", false);
+          targetBtn.classList.add("btn--loading");
+
+         //  return console.log('ffff',self.createCustomer)
+          const res = await self.createCustomer(
+            input.value,
+            input.dataset.handle
+          );
+          targetBtn.classList.remove("btn--loading");
+          let statuscode = res?.status;
+
+          console.log("FORM RESPONSE", statuscode);
+
+          if (statuscode == 201) {
+            //Success
+            input.classList.add("hide");
+            input.value = "";
+            targetBtn.innerText = "Success!";
+            targetBtn.setAttribute("disabled", "");
+            formError("", false);
+          } else if (statuscode == 422) {
+            formError("Unable to process or Email already taken", true);
+          } else if (statuscode == 404) {
+            formError("Content Not Found", true);
+          } else {
+            formError("Fatal Error", true);
+          }
+        } else {
+          formError("Invalid Email Format", true);
+        }
+      }.bind(this));
+    });
+  },
+
+  utils: {
+    validateEmail: (email) => {
+      return String(email)
+        .toLowerCase()
+        .match(
+          /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+        );
+    },
+  },
+
+  sendTestRequest: async function () {
+    const url = "https://okaybears-preorder.herokuapp.com/customers";
+    const response = await axios
+      .get(url)
+      .then((res) => {
+        console.log("sendTestRequest", res.data);
+        return res;
+      })
+      .catch((err) => {
+        console.log(err);
+        return err;
+      });
+
+    return response.data;
+  },
+
+  createCustomer: async function (email, tag) {
+    const url = "https://okaybears-preorder.herokuapp.com/customer-create";
+
+    const data = {
+      email: email,
+      tags: tag,
+    };
+    const options = {
+      url: url,
+      method: "post",
+      data: data,
+    };
+
+    console.log("form Data", data);
+
+    return axios(options)
+      .then(function (res) {
+        console.log("NEW RES", res.status, res.data);
+        return res;
+      })
+      .catch(function (error) {
+        console.log(error);
+        if (error?.response) {
+          return error?.response;
+        } else {
+          return error;
+        }
+      });
+  },
+};
+/* Define methods for dynamic loaded sections */
+Barracuda.loadSection = function(){
+
+   document.querySelectorAll(".load-section:not(.initialized)").forEach(el=>{
+      console.log("loading section")
+      el.classList.add("initialized");
+
+      el.addEventListener("click",async (e)=>{
+         prevent(e);
+
+         //Check eligibility
+         var currentContent = document.querySelector(".overlay-content-content>form, .overlay-content-content>div");
+         const currentTarget=e.currentTarget;
+
+         const nftCheckEnable=currentTarget.classList.contains('nft--check');
+         const bearsNftCheckEnable=currentTarget.classList.contains('bears-nft--check');
+         const productid=currentTarget.dataset.productid;
+         if(bearsNftCheckEnable){
+            document.dispatchEvent(
+              new CustomEvent("modalcheck:open", {
+                detail: { productid: productid },
+              })
+            );
+            return;
+         }
+
+         if(nftCheckEnable){
+            const dotAV=currentTarget.querySelector('.availability-dot');
+            const dotArray=['red-dot','green-dot','orange-dot'];
+            const activeClass='green-dot';
+            const inactiveClass='orange-dot';
+            const redClass='red-dot';
+
+            const responseInit=await Barracuda.initiateWallet();
+            dotAV.classList.remove('hide');
+            if(responseInit.status==false) {
+               dotArray.forEach((cls) => dotAV.classList.remove(cls));
+               dotAV.classList.add(redClass);
+               return;
+            }
+
+            dotAV.classList.add('loading');
+
+            const reponseNFT=await Barracuda.tokenGatedNFT(productid,window.publicKey);
+            const okayBearNftTokensArray=reponseNFT?.result?.okayBearNfts.map(el=>el.tokenAddress);
+            const tokenAddresses=okayBearNftTokensArray.join(',');
+            const checkData= await Barracuda.checkEligibility(productid,tokenAddresses)
+            
+            const isEligible=checkData?.result?.eligibility.some(el=>el.canBeRedeemed===true);
+
+            dotAV.classList.remove('loading');
+            dotArray.forEach((cls) => dotAV.classList.remove(cls));
+            isEligible === true
+              ? dotAV.classList.add(activeClass)
+              : dotAV.classList.add(inactiveClass);
+            
+            console.log('CHECK nftCheckEnable',isEligible);
+            return;
+            
+         }
+
+         if(currentContent && currentContent.dataset.source){
+            var t = document.querySelector("#"+currentContent.dataset.source);
+            /* console.log("Return this: ", currentContent, " into this: ", t); */
+            if(t) t.appendChild(currentContent);
+         }
+
+         var targetElement = el.dataset.target? (document.querySelector("#"+el.dataset.target)? document.querySelector("#"+el.dataset.target): false) : false
+
+         if(!targetElement){
+            document.querySelector(".overlay-content").innerHTML = "";
+            document.querySelector(".overlay-content").classList.add("loading")
+            document.querySelector("body").classList.add("show-overlay");
+            lockBodyPosition();
+         }
+
+
+
+         var url =  window.location.href;
+         if(el.dataset.url){
+            var url = el.dataset.url;
+         } 
+         if((!el.dataset.url && el.closest("form") )|| el.dataset.useform){
+            var url = url.split("#")
+            var url = url[0] + (url[0].includes("?") ? "&" : "?") + new URLSearchParams(Array.from(new FormData(el.closest("form"))));
+         }
+
+         var url = url.split("#")
+         var url_section = url[0] + (url[0].includes("?") ? "&" : "?") + "sections=" + el.dataset.section;
+         if(el.dataset.urlset)
+         { 
+            window.history.pushState('', '', url[0]);
+         }
+         /* console.log("LoadSection: " + url_section); */
+         axios.get(url_section)
+         .then(function (response) {
+
+            var code = response.data? (response.data[el.dataset.section]? response.data[el.dataset.section] : false):false;
+            if (code){
+               code = code.replace(/__CURRENT_URL_WITH_APPEND__/g, url[0] + (url[0].includes("?") ? "&" : "?"));
+               code = code.replace(/__CURRENT_URL__/g, url[0]);
+
+               if(targetElement){
+                  targetElement.classList.remove("loading")
+
+                  if(targetElement.innerHTML!=""){
+                     Barracuda.fadeOut(targetElement, (()=>{
+                        if(el.dataset.part){
+                           var candidate = document.createElement("div");
+                           candidate.innerHTML = code;
+                           code = candidate.querySelector("."+el.dataset.part);
+                           targetElement.innerHTML = "";
+                           targetElement.appendChild(code);
+                        }else{
+                           targetElement.innerHTML = code;
+                        }
+                        Barracuda.init();
+                        Barracuda.elements.init();
+                        
+                        Barracuda.fadeIn(targetElement,Barracuda.setScrollBarWidth)
+                     }).bind(this))
+                  }else{
+                     if(el.dataset.part){
+                        var candidate = document.createElement("div");
+                        candidate.innerHTML = code;
+                        code = candidate.querySelector("."+el.dataset.part);
+                        targetElement.innerHTML = "";
+                        targetElement.appendChild(code);
+                     }else{
+                        targetElement.innerHTML = code;
+                     }
+                     Barracuda.init();
+                     Barracuda.elements.init();
+                     Barracuda.setScrollBarWidth();
+                  }
+
+               }else{
+                  document.querySelector(".overlay-content").classList.remove("loading")
+                  document.querySelector(".overlay-content").innerHTML = code;
+                  lockBodyPosition();
+               }
+                  Barracuda.init();
+                  Barracuda.elements.init();
+            } 
+         })
+         .catch(function (error) {
+            if(!targetElement){
+               document.querySelector("body").classList.remove("show-overlay");
+               document.querySelector(".overlay-content").classList.remove("loading")
+            }
+            console.warn(error);
+         });
+         return false;
+      },false)
+   });
+}
+
+/* Dynamic load page - part page */
+Barracuda.loadPage = function(){
+   document.querySelectorAll(".load-page:not(.initialized)").forEach(el=>{
+      el.classList.add("initialized");
+      el.addEventListener("click",(e)=>{
+         prevent(e);
+
+         var targetElement = el.dataset.target? (document.querySelector("#"+el.dataset.target)? document.querySelector("#"+el.dataset.target): false) : false
+         var sourceId = el.dataset.source? el.dataset.source : (el.dataset.target? el.dataset.target: false);
+         var url = el.dataset.url? el.dataset.url : (el.href? el.href : false);
+         url = (url.split("#"))[0];
+         
+         if(el.dataset.urlset && el.closest(".topbar")==null) window.history.pushState('', '', url);
+         
+         if(targetElement && sourceId && url){
+            /* console.log("BarracudaLoadPage: urlset: "+el.dataset.urlset+", url: "+ url +", sourceId: #"+sourceId+", target:", targetElement) */
+            targetElement.classList.add("loading");
+
+            if(sourceId == "pagination"){
+               /* console.log("BarracudaLoadPage: Pagination - scroll up ", targetElement.offsetTop) */
+               if(targetElement.offsetTop - 200 < 200)
+                  window.scrollTo({top: 0, left: 0, behavior: 'smooth'})
+               else
+                  window.scrollTo({top: (targetElement.offsetTop - 200), left: 0, behavior: 'smooth'})
+
+            }
+
+            axios.get(url)
+            .then(function (response) {
+               if(response.data){
+                  var x = document.createElement("html");
+                  x.innerHTML = response.data;
+                  var source = x.querySelector("#"+ sourceId);
+                  if(source){
+                     el.parentElement.querySelectorAll(".load-page.active").forEach(function (y){
+                        y.classList.remove("active");
+                     })
+                     el.classList.add("active")
+                     
+                     Barracuda.fadeOut(targetElement, (()=>{
+                        if(sourceId != "pagination"){
+                           targetElement.innerHTML = "";
+                           targetElement.appendChild(source);
+                        }else{
+                           source.classList.add("hide", "loading")
+                           targetElement.replaceWith(source);
+                           targetElement = source;
+                        }
+                        targetElement.classList.remove("loading")
+
+                        Barracuda.init();
+                        Barracuda.elements.init();
+
+                        Barracuda.fadeIn(targetElement, Barracuda.setScrollBarWidth)
+                     }).bind(this))
+                  }
+                  return false;
+               }
+               return false;
+            })
+            .catch(function (error) {
+               console.error(error);
+            });
+         }
+         return false;
+      },false)
+   });
+}
+/* Show template in overlay */
+Barracuda.templateOverlay = function(){
+   document.querySelectorAll(".template-overlay:not(.initialized)").forEach(el=>{
+      el.classList.add("initialized");
+      el.addEventListener("click",(e)=>{
+         prevent(e);
+         var template = document.getElementById(el.dataset.source);
+
+         if(template){
+            document.querySelector("body").classList.add("show-overlay");
+            document.querySelector(".overlay-content").classList.add("loading");
+            lockBodyPosition();
+   
+            var currentContent = document.querySelector(".overlay-content-content>form, .overlay-content-content>div");
+            var target = document.querySelector(".overlay-content")
+               
+            if(currentContent && currentContent.dataset.source && document.querySelector("#"+currentContent.dataset.source))
+               document.querySelector("#"+currentContent.dataset.source).appendChild(currentContent);
+
+            target.innerHTML = "";
+
+            setTimeout(()=>{
+               var closer = document.createElement("a");
+               closer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+               closer.classList.add("icon","icon-x","overlay-closer");
+               
+               var content = document.createElement("div");
+               content.innerHTML = template.innerHTML;
+               content.classList.add("overlay-content-content","quick-view","quick-view-form","scroll-inside");
+               if (template.dataset.type) content.classList.add(template.dataset.type);
+               
+               target.appendChild(closer);
+               target.appendChild(content);
+
+               if(content.querySelector(".map")){
+                  setTimeout(function() { 
+                     Barracuda.loadMapsScript(content);
+                  },200);
+               }
+
+               Barracuda.init();
+               Barracuda.elements.init();
+               document.querySelector(".overlay-content").classList.remove("loading");
+            },500)
+         }
+      })
+   })
+}
+/* Show form in overlay */
+Barracuda.formOverlay = function(){
+   document.querySelectorAll(".form-overlay:not(.initialized)").forEach(el=>{
+      el.classList.add("initialized");
+      el.addEventListener("click",(e)=>{
+         prevent(e);
+
+         var newSource = document.querySelector("#"+el.dataset.source+">form, #"+el.dataset.source+">div")? document.querySelector("#"+el.dataset.source+">form, #"+el.dataset.source+">div") : false;
+         
+         document.querySelector("body").classList.add("show-overlay");
+         document.querySelector(".overlay-content").classList.add("loading");
+         lockBodyPosition();
+
+         if(newSource){
+            if(newSource.querySelector(".map") && !document.getElementById("ol-script")){
+               Barracuda.loadMapsScript();
+            }
+
+            var currentContent = document.querySelector(".overlay-content-content>form, .overlay-content-content>div");
+            var target = document.querySelector(".overlay-content")
+            
+
+            if( currentContent == null|| currentContent && currentContent.dataset.source != el.dataset.source){
+               if(currentContent && currentContent.dataset.source){
+                  var t = document.querySelector("#"+currentContent.dataset.source);
+                  t.appendChild(currentContent);
+               }
+               newSource.dataset.source = el.dataset.source;
+               target.innerHTML = "";
+
+               var closer = document.createElement("a");
+               closer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+               closer.classList.add("icon","icon-x","overlay-closer");
+               
+               var content = document.createElement("div");
+               content.classList.add("overlay-content-content","quick-view","quick-view-form","scroll-inside");
+               if (newSource.dataset.type) content.classList.add(newSource.dataset.type);
+
+               content.appendChild(newSource)
+
+               if(content.querySelector(".map")){
+                  setTimeout(function() {
+                     Barracuda.loadMapsScript(content);
+                  },110);
+               }
+
+               target.appendChild(closer);
+               target.appendChild(content);
+
+               setTimeout(function() {
+                  document.querySelector(".overlay-content").classList.remove("loading");
+               },100)
+
+            }else{
+
+            document.querySelector(".overlay-content").classList.remove("loading");
+            }
+         }else{
+
+            setTimeout(function() {
+               document.querySelector(".overlay-content").classList.remove("loading");
+            },100)
+         }
+      });
+   });
+}
+/* Define methods for dynamic collapse elements */
+Barracuda.toggleCollapsible = function(e) {
+   prevent(e);
+   var opener = e.target.closest(".collapse-toggle")
+   if(opener){
+      var element = document.getElementById(opener.dataset.target);
+      if(element.classList.contains("collapsed")){
+         element.style.height = element.scrollHeight + "px";
+         element.classList.remove("collapsed");
+         setTimeout(()=>{
+            element.style.height = "auto";
+         }, 500);
+         opener.classList.add("opened");
+      }else{
+         element.style.height = element.scrollHeight + "px";
+         setTimeout(()=>{
+            element.style.height = 0 + "px";
+         },10);
+         element.classList.add("collapsed");
+         opener.classList.remove("opened");
+      }
+   }
+}
+
+/* Add event listeners for dynamic collapse elements */
+Barracuda.initCollapsible = function(){
+   document.querySelectorAll(".collapse-toggle:not(.collapse-toggle-initialized)").forEach(el => {
+      el.addEventListener("click",Barracuda.toggleCollapsible);
+      el.classList.add("collapse-toggle-initialized");
+   })
+}
+
+/* Create autoresize textarea element */
+Barracuda.textareaAutoresize = function(){
+   document.querySelectorAll("textarea.autoresize:not(.autoresize-initialized)").forEach(el => {
+      el.addEventListener("keyup",(e)=>{
+         e.target.style.height = "0px";
+         e.target.style.height = (e.target.scrollHeight - (el.dataset.correction? el.dataset.correction : 26)) + "px";
+      })
+      el.classList.add("autoresize-initialized");
+   })
+}
+
+/* Close section and save it to cookies */
+Barracuda.cookieSection = function(){
+   document.querySelectorAll(".hide-by-cookie-section:not(.hide-by-cookie-section-initialized)").forEach((el)=>{
+      var dataEl = el.querySelector(".hide-by-coookie-data");
+      var respawn_time = el.dataset.respawn? parseInt(el.dataset.respawn) : parseInt(dataEl? (dataEl.dataset.respawn? dataEl.dataset.respawn : 0) : 0);
+   
+      el.classList.add("hide-by-cookie-section-initialized")
+      if(getCookie('cookie-'+el.id+'-'+respawn_time) != "closed" || Shopify.designMode){
+         el.classList.remove("hide-by-cookie");
+         el.querySelectorAll(".hide-by-cookie-toggle").forEach(toggle=>{
+            toggle.addEventListener("click",()=>{
+               if(el.querySelector(".badge-section")){
+                  Barracuda.fadeOut(el.querySelector(".badge-section"),()=>{
+                     el.classList.add("hide-by-cookies");
+                  }, (Barracuda.duration * 2));
+               }
+               if(el.classList.contains("announcement-bar-content"))
+               { 
+                  el.style.height = parseInt(el.offsetHeight) + "px";
+                  el.style.overflow = "hidden";
+                  el.style.transition = "height 1s ease";
+                  el.style.height = "0px";
+                  setTimeout(function(){Barracuda.initAddHeight();
+                  },10)
+
+               }
+               /* console.log("Cookies - element: ", el, " repsawn_time: ", respawn_time) */
+               // respawn_time is in days
+               if(respawn_time > 0) setCookie('cookie-'+el.id+'-'+respawn_time,"closed",respawn_time);
+            },false);
+         })
+      }
+   })
+}
+
+Barracuda.loadMapsScript = function(content = null){
+   if(!document.getElementById("ol-script")){
+      var tag = document.createElement("script");
+      tag.id = "ol-script"
+      tag.src = document.querySelector(".ol-url")? document.querySelector(".ol-url").dataset.url : "";
+      document.getElementsByTagName("head")[0].appendChild(tag);
+
+      window.removeEventListener("scroll", Barracuda.elements.lazyMapsListener)
+   }else{
+      if(content)
+         content.querySelectorAll(".map.map-initialized").forEach(element => {
+            element.dispatchEvent(new Event('renderMap'))
+         })
+      document.querySelectorAll(".map:not(.map-initialized)").forEach(element => {
+         new BarracudaMap(element)
+      })
+   }
+}
+Barracuda.checkMaps = function(){
+   if(typeof BarracudaMap === "undefined"){
+      Barracuda.elements.lazyMaps.forEach((element, index)=>{
+         if(!document.getElementById("ol-script") && element.getBoundingClientRect().top <= (window.innerHeight + window.scrollY)){
+            Barracuda.loadMapsScript();
+            window.removeEventListener("scroll", Barracuda.checkMaps, {passive: true});
+         }
+      })
+   }
+}
+Barracuda.checkVideos = function(){
+   Barracuda.elements.lazyVideos.forEach((element, index)=>{
+   if(element.getBoundingClientRect().top <= (window.innerHeight + window.scrollY)){
+      element.src = element.dataset.src;
+      var video = element.closest("video");
+      if(video && video.play && video.autoplay ) video.play();
+
+      Barracuda.elements.lazyVideos.splice(index, 1);
+      if(Barracuda.elements.lazyVideos.length==0) 
+         window.removeEventListener("scroll", Barracuda.elements.lazyVideosListener)
+   }
+   })
+}
+
+/* Function which adding spaces between sections with differents backgrounds */
+Barracuda.sectionPaddingForBackgroundsTwo = function(ignoreSection = false){
+var type = "";
+var first = false;
+if(ignoreSection){
+      var sections = document.querySelectorAll("#page-content>.shopify-section:not(#shopify-section-header):not(#"+ignoreSection.id+")");
+}else{
+   var sections = document.querySelectorAll("#page-content>.shopify-section:not(#shopify-section-header)");
+}
+sections.forEach((element, key, elements)=>{
+
+   if(!first && !element.classList.contains("out-of-structure")){
+      element.classList.add("first-of-content")
+      first = true;
+   }
+
+   var child = element.querySelector(".section-with-padding,.section-without-padding");
+   /*  console.log("First-of-type section: key: ",key," type-before:", type, " child:", child? child : "-", " child-type", child? child.dataset.background : "", " element:", element); */
+   if(key == 0){
+      //first element
+      element.classList.add("first-of-type")
+      type = child? child.dataset.background : "";
+   }else{
+      //if new component
+      if(child){
+      //if same type as previous
+      if(child.dataset.background == type || type == "same"){
+         element.classList.remove("first-of-type")
+         type = child.dataset.background;
+      }else{
+         //otherwise set as first of type
+         element.classList.add("first-of-type")
+         type = child.dataset.background
+      }
+      }else{
+      element.classList.add("first-of-type")
+      type = "";
+      }
+   }
+});
+}
+
+/* Function which keep elements squared. */
+Barracuda.toSquare = function(){
+   document.querySelectorAll(".square").forEach((element) => {
+   var width = element.offsetWidth;
+   /* console.log("square: ",element, "width: ",width) */
+   element.style.height = width + "px";
+   })
+}
+
+/* Functions which define css variable for announcement bar */
+Barracuda.initAddHeight = function(){
+   let root = document.documentElement;
+   let el = document.querySelector(".announcement-bar");
+   if(el){
+      var addHeight = el.offsetHeight? el.offsetHeight : 0;
+      root.style.setProperty('--announcement-bar-height', addHeight + "px");
+   }
+   let header = document.querySelector("#header>.header");
+   if(header){
+      var headerHeight = header.offsetHeight? header.offsetHeight : 0;
+      root.style.setProperty('--header-height', headerHeight + "px");
+   }
+}
+
+Barracuda.setScrollBarWidth = function(){
+   if(!document.querySelector(".topbar.visible")){
+      /* console.log("ScrollbarWidth: set to: ",`${window.innerWidth - document.body.clientWidth}px`) */
+      const scrollbarWidth = window.innerWidth - document.body.clientWidth;
+      if(scrollbarWidth < 60)
+      document.body.style.setProperty(
+         "--scrollbar-width",
+         scrollbarWidth + "px"
+      );
+   }
+}
+
+/* Inicialization for barracuda functions */
+Barracuda.init = function(){
+   Barracuda.reInit();
+      window.addEventListener("resize", ()=>{
+         Barracuda.toSquare();
+         Barracuda.setScrollBarWidth();
+         Barracuda.initAddHeight();
+      }); 
+   if(Barracuda.elements.lazyVideos.length>0){
+      Barracuda.elements.lazyVideosListener = window.addEventListener("scroll", Barracuda.checkVideos, {passive: true});
+      setTimeout(Barracuda.checkVideos, 3000);
+   }
+   if(Barracuda.elements.lazyMaps.length>0){
+      Barracuda.elements.lazyMapsListener = window.addEventListener("scroll", Barracuda.checkMaps, {passive: true});
+      setTimeout(Barracuda.checkMaps, 3000);
+   }
+}
+/* ReInit after Shopify Theme editor changes something  */
+Barracuda.reInit = function(){
+   Barracuda.cookieSection();
+   Barracuda.initCollapsible();
+   Barracuda.loadSection();
+   Barracuda.loadPage();
+   Barracuda.sectionPaddingForBackgroundsTwo();
+   Barracuda.textareaAutoresize(); 
+   Barracuda.toSquare();
+   Barracuda.initAddHeight();
+   Barracuda.checkVideos();
+   Barracuda.checkMaps();
+   Barracuda.formOverlay();
+   Barracuda.templateOverlay();
+}
+
+/* System for Dynamic colors when overlay inverted elements. */
+class BarracudaOverlapping{
+   constructor(){
+      this.setOverlaping();
+      window.addEventListener("scroll", this.setOverlaping.bind(this));
+      window.addEventListener("resize", this.setOverlaping.bind(this));
+   }
+   setOverlaping(){
+      document.querySelectorAll(".sidebar .icon svg,.change-color-overlap").forEach(el=>{
+            var overlap = false;
+            document.querySelectorAll(".use-inverted-colors.full-width, .control-inverted").forEach(background=>{
+               if(this.isOverlapping(el, background))
+                  overlap = true;
+               });
+               if(overlap) 
+                        el.classList.add("use-inverted-colors");
+               else
+                        el.classList.remove("use-inverted-colors");
+      });
+   }
+   check(){
+      this.setOverlaping();
+   }
+   isOverlapping(e1, e2){
+      if (e1.length && e1.length > 1) {
+      e1 = e1[0];
+      }
+      if (e2.length && e2.length > 1){
+      e2 = e2[0];
+      }
+      const rect1 = e1 instanceof Element ? e1.getBoundingClientRect() : false;
+      const rect2 = e2 instanceof Element ? e2.getBoundingClientRect() : false;
+      
+      let overlap = false;
+   
+      if (rect1 && rect2) {
+      overlap = !(
+         rect1.right < rect2.left || 
+         rect1.left > rect2.right || 
+         rect1.bottom < rect2.top || 
+         rect1.top > rect2.bottom
+      );
+      return overlap;  
+      }
+   
+      console.warn('Not valid HTMLElement object');
+      return overlap;
+   }
+}
+
+
+class BarracudaAnimatedMenu{
+   constructor(){
+   this.debug = true;
+   this.hidden = false;
+   this.menu = document.querySelector(".main-menu");
+   this.linksInMenu = this.menu? this.menu.querySelectorAll("ul:not(.child):not(.grandchild)>li"): false;
+   
+   }
+   hideMenuLinks(){
+      if(!this.hidden){
+         this.hidden = true;
+         this.linksInMenu.forEach(function (link) {
+            link.dataset.height = link.clientHeight + 1;
+            link.style.maxHeight = 0 + "px";
+            link.style.overflow = "hidden";
+            link.style.transition = "max-height 0.55s cubic-bezier(0.32, 0.08, 0.24, 1)";
+         })
+      }
+   }
+   showMenuLinks(i = 0){
+      if(i == 0) this.hidden = false;
+      var link = this.linksInMenu[i];
+      if(link){
+         link.style.maxHeight = link.dataset.height + "px";
+         setTimeout((function (){this.removeSettings(link)}).bind(this), 1000);
+         setTimeout((function (){this.showMenuLinks(++i)}).bind(this), 6);
+      }
+   }
+   removeSettings(link){
+      if(link){
+         link.style.transition = "";
+         link.style.maxHeight = "";
+         link.style.overflow = "";
+      }
+   }
+}
+
+class BarracudaRichMedia{
+   constructor(element){
+      this.element = element;
+      this.mediaid = element.dataset.mediaid;
+      this.template = document.getElementById("templateid-"+this.mediaid);
+      this.container = document.getElementById("containerid-"+this.mediaid);
+      this.cover = this.element;
+      this.media = null
+      this.type = null
+
+      if(this.template && this.container){
+         /* Add listener to show button */
+         console.log(this.element.parentElement)
+         this.element.parentElement.querySelector("button.media-icon").addEventListener("click",this.show.bind(this), false);
+      }else{
+         console.error("BarracudaRichMedia: Rich media not found - container or template", this.template, this.container)
+      }
+   }
+   getType(){
+      if(this.container.querySelector(".js-youtube")){
+         this.media = this.container.querySelector(".js-youtube");
+         this.type = "youtube";
+      }
+      if(this.container.querySelector(".js-vimeo")){
+         this.media = this.container.querySelector(".js-vimeo");
+         this.type = "vimeo";
+      }
+      if(this.container.querySelector("video")){
+         this.media = this.container.querySelector("video");
+         this.type = "video";
+      }
+   }
+
+   play(){
+      console.log("BarracudaRichMedia: play", this.mediaid);
+      switch(this.type){
+         case "youtube":
+            this.media.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*')
+            break;
+         case "vimeo":
+            this.media.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*')
+            break;
+         case "video":
+            this.media.play();
+            break;
+      }
+   }
+   pause(){
+      console.log("BarracudaRichMedia: pause", this.mediaid);
+      switch(this.type){
+         case "youtube":
+            this.media.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+            break;
+         case "vimeo":
+            this.media.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+            break;
+         case "video":
+            this.media.pause();
+            break;
+      }
+   }
+   hide(){
+      console.log("BarracudaRichMedia: hide", this.mediaid);
+      this.container.innerHTML = "";
+      this.cover.classList.remove("hidden");
+      this.container.classList.add("hidden");
+   }
+   show(){
+      console.log("BarracudaRichMedia: show", this.mediaid);
+      this.cover.classList.add("hidden");
+      this.container.classList.remove("hidden");
+      this.container.innerHTML = this.template.innerHTML;
+      this.getType();
+
+      this.stopOthers();
+      this.play();
+      setTimeout(this.play.bind(this),100);
+   }
+   stopOthers(){
+      for (const [key, value] of Object.entries(Barracuda.elements.richMedia)) {
+         if(key != this.mediaid)
+            value.pause();
+       }
+   }
+}
+
+class ProductModel extends HTMLElement {
+   constructor() {
+     super();  
+     Shopify.loadFeatures([
+       {
+         name: 'model-viewer-ui',
+         version: '1.0',
+         onLoad: this.setupModelViewerUI.bind(this),
+       },
+     ]);
+   }
+   setupModelViewerUI(errors) {
+     if (errors) return;
+     this.modelViewerUI = new Shopify.ModelViewerUI(this.querySelector('model-viewer'));
+   }
+ }
+ customElements.define('product-model', ProductModel);
